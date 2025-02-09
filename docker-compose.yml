@@ -1,12 +1,29 @@
 version: '3'
 services:
-  backend:
+  backend1:
     build:
       context: ./boot
       dockerfile: Dockerfile
-    container_name: exchange-backend
+    container_name: exchange-backend1
     ports:
       - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      kafka:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
+    networks:
+      - exchange-network
+
+  backend2:
+    build:
+      context: ./boot
+      dockerfile: Dockerfile
+    container_name: exchange-backend2
+    ports:
+      - "8081:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
     depends_on:
@@ -51,6 +68,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - exchange-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8989:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    depends_on:
+      - kafka
     networks:
       - exchange-network
 
