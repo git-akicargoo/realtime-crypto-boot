@@ -1,0 +1,471 @@
+아래는 제안하는 아키텍처와 이에 따른 스프링부트 프로젝트의 구현 예시 및 패키지 구조, 코드 예시 등을 포함한 상세 기획서입니다.
+
+1. 시스템 아키텍처 개요
+목적:
+
+거래소(Exchange)로부터 실시간 전체 코인 가격 데이터를 수집
+데이터를 Kafka 토픽으로 전송하여 내부 메시지 브로커 역할 수행
+Kafka 데이터를 기반으로 Redis에 최신 가격 정보를 업데이트
+클라이언트 요청(또는 웹소켓 구독)을 통해 원하는 코인(예: BTC, DOGE 등) 정보를 필터링하여 실시간 제공
+Pinpoint와 같은 APM/분산 추적 에이전트를 통해 전체 시스템 성능 모니터링
+주요 구성 요소:
+
+데이터 수집 서비스 (Main Backend)
+
+거래소와의 웹소켓 연결을 통해 전체 코인 가격 데이터를 수집
+수집된 데이터를 Kafka 토픽으로 전송
+특징: 단일 인스턴스 또는 제한된 인스턴스로 운영하여 거래소의 API 제한 회피
+데이터 처리/분배 서비스 (Sub Backend)
+
+Kafka 토픽에서 데이터를 소비하고, 필터링 및 추가 가공 수행
+최신 가격 정보를 Redis에 업데이트하거나, Redis Pub/Sub을 통해 실시간 이벤트 전파
+클라이언트와의 웹소켓 연결(또는 REST API)을 통해 요청에 맞게 특정 코인 정보를 제공
+Kafka (메시지 브로커)
+
+데이터 수집 서비스에서 전송한 실시간 데이터를 저장 및 분배
+소비자 그룹을 활용하여 여러 인스턴스가 중복 없이 데이터를 소비하도록 구성
+Redis (인메모리 캐시 및 Pub/Sub)
+
+최신 코인 가격 정보를 빠르게 업데이트 및 제공
+Redis Pub/Sub 또는 Streams를 활용하여 데이터 변경 이벤트를 웹소켓 서버에 푸시
+클라이언트
+
+웹/모바일 클라이언트는 서브 백엔드와 웹소켓/REST API를 통해 실시간 데이터를 수신
+APM/분산 추적 (예: Pinpoint)
+
+모든 백엔드 서비스에 에이전트를 부착하여 분산 추적 및 성능 모니터링
+2. 스프링부트 프로젝트 패키지 구조
+아래는 메인 백엔드(데이터 수집)와 서브 백엔드(데이터 처리/분배) 각각에 대한 예시 패키지 구조입니다.
+
+2.1 데이터 수집 서비스 (Main Backend)
+arduino
+복사
+com.example.datacollector
+├── config
+│   └── WebSocketExchangeConfig.java  // 거래소와의 웹소켓 연결 설정
+├── exchange
+│   └── ExchangeWebSocketClient.java    // 거래소와 연결 및 메시지 처리 로직
+├── kafka
+│   └── KafkaProducerService.java        // Kafka로 메시지 전송하는 서비스
+├── service
+│   └── DataCollectionService.java       // 거래소 데이터 수집 전체 흐름 관리
+└── DatacollectorApplication.java        // Spring Boot Application 메인 클래스
+2.2 데이터 처리/분배 서비스 (Sub Backend)
+arduino
+복사
+com.example.datadistributor
+├── config
+│   ├── KafkaConsumerConfig.java         // Kafka 소비자 설정
+│   ├── RedisConfig.java                 // Redis 연결 설정 및 템플릿 구성
+│   └── WebSocketServerConfig.java       // 웹소켓 엔드포인트 설정 (클라이언트와 연결)
+├── kafka
+│   └── KafkaConsumerService.java        // Kafka 토픽에서 데이터 소비 로직
+├── redis
+│   └── RedisCacheService.java           // Kafka에서 받아온 데이터를 Redis에 업데이트
+├── controller
+│   └── CoinPriceController.java         // 클라이언트 요청 처리 (REST API 또는 웹소켓 메시지 핸들러)
+├── service
+│   └── CoinPriceService.java            // 비즈니스 로직(필터링, 가공 등) 처리
+└── DatadistributorApplication.java      // Spring Boot Application 메인 클래스
+참고: 실제 운영 환경에서는 두 서비스가 물리적으로 분리되어 배포되지만, 예제에서는 개별 프로젝트로 분리하여 설명합니다.
+
+3. 각 서비스별 주요 코드 예시
+3.1 데이터 수집 서비스 (Main Backend)
+3.1.1 거래소와의 웹소켓 연결 및 데이터 수집
+java
+복사
+// 패키지: com.example.datacollector.exchange
+package com.example.datacollector.exchange;
+
+import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
+
+public class ExchangeWebSocketClient extends TextWebSocketHandler {
+
+    private final KafkaProducerService kafkaProducerService;
+
+    public ExchangeWebSocketClient(KafkaProducerService kafkaProducerService) {
+        this.kafkaProducerService = kafkaProducerService;
+    }
+
+    @Override
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        // 거래소 웹소켓 연결 후 구독 메시지 전송 (예: 전체 코인 데이터 구독)
+        String subscriptionMessage = "[{\"ticket\":\"collector\"}, {\"type\":\"ticker\",\"codes\":[\"ALL\"]}]";
+        session.sendMessage(new TextMessage(subscriptionMessage));
+        System.out.println("거래소에 구독 메시지 전송: " + subscriptionMessage);
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        // 거래소에서 받은 메시지를 KafkaProducerService를 통해 Kafka로 전송
+        String payload = message.getPayload();
+        System.out.println("거래소에서 수신한 메시지: " + payload);
+        kafkaProducerService.sendMessage(payload);
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+        System.out.println("거래소와의 웹소켓 연결 종료: " + status);
+    }
+}
+3.1.2 Kafka로 메시지 전송 서비스
+java
+복사
+// 패키지: com.example.datacollector.kafka
+package com.example.datacollector.kafka;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+
+@Service
+public class KafkaProducerService {
+
+    private static final String TOPIC = "coin-prices";
+
+    @Autowired
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    public void sendMessage(String message) {
+        // 메시지 전송
+        kafkaTemplate.send(TOPIC, message);
+        System.out.println("Kafka로 메시지 전송: " + message);
+    }
+}
+3.1.3 데이터 수집 전체 흐름 관리
+java
+복사
+// 패키지: com.example.datacollector.service
+package com.example.datacollector.service;
+
+import com.example.datacollector.exchange.ExchangeWebSocketClient;
+import com.example.datacollector.kafka.KafkaProducerService;
+import org.springframework.stereotype.Service;
+import org.springframework.web.socket.client.standard.StandardWebSocketClient;
+
+@Service
+public class DataCollectionService {
+
+    private final KafkaProducerService kafkaProducerService;
+
+    public DataCollectionService(KafkaProducerService kafkaProducerService) {
+        this.kafkaProducerService = kafkaProducerService;
+    }
+
+    public void startDataCollection() {
+        // 거래소 웹소켓 URL (예: 업비트)
+        String exchangeUrl = "wss://api.upbit.com/websocket/v1";
+        StandardWebSocketClient client = new StandardWebSocketClient();
+        ExchangeWebSocketClient handler = new ExchangeWebSocketClient(kafkaProducerService);
+        // 비동기로 연결 수행
+        client.doHandshake(handler, exchangeUrl);
+        System.out.println("거래소 데이터 수집 서비스 시작");
+    }
+}
+3.1.4 Application 클래스
+java
+복사
+// 패키지: com.example.datacollector
+package com.example.datacollector;
+
+import com.example.datacollector.service.DataCollectionService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class DatacollectorApplication {
+
+    @Autowired
+    private DataCollectionService dataCollectionService;
+
+    public static void main(String[] args) {
+        SpringApplication.run(DatacollectorApplication.class, args);
+    }
+
+    // 예를 들어 ApplicationRunner를 사용하여 시작 시 데이터 수집 시작
+    // 또는 @PostConstruct를 사용하여 dataCollectionService.startDataCollection() 호출
+}
+Kafka 관련 설정은 application.yml이나 별도의 KafkaProducerConfig 클래스로 추가 구성해야 합니다.
+
+3.2 데이터 처리/분배 서비스 (Sub Backend)
+3.2.1 Kafka 소비자 설정 및 소비 서비스
+java
+복사
+// 패키지: com.example.datadistributor.config
+package com.example.datadistributor.config;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@EnableKafka
+@Configuration
+public class KafkaConsumerConfig {
+
+    @Bean
+    public DefaultKafkaConsumerFactory<String, String> consumerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        // Kafka broker 주소 등 설정 (application.yml에서 읽어올 수도 있음)
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "coin-price-group");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        return new DefaultKafkaConsumerFactory<>(props);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory());
+        return factory;
+    }
+}
+java
+복사
+// 패키지: com.example.datadistributor.kafka
+package com.example.datadistributor.kafka;
+
+import com.example.datadistributor.redis.RedisCacheService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Service;
+
+@Service
+public class KafkaConsumerService {
+
+    @Autowired
+    private RedisCacheService redisCacheService;
+
+    @KafkaListener(topics = "coin-prices", groupId = "coin-price-group")
+    public void consume(String message) {
+        System.out.println("Kafka에서 메시지 수신: " + message);
+        // 수신한 메시지를 Redis 캐시 서비스에 전달하여 최신 가격 업데이트
+        redisCacheService.updateCache(message);
+    }
+}
+3.2.2 Redis 설정 및 캐싱 서비스
+java
+복사
+// 패키지: com.example.datadistributor.config
+package com.example.datadistributor.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+
+@Configuration
+public class RedisConfig {
+
+    @Bean
+    public RedisConnectionFactory redisConnectionFactory() {
+        // 기본 localhost:6379 사용 (필요시 외부 설정파일에서 읽어오도록 구성)
+        return new LettuceConnectionFactory();
+    }
+
+    @Bean
+    public RedisTemplate<String, String> redisTemplate() {
+        RedisTemplate<String, String> template = new RedisTemplate<>();
+        template.setConnectionFactory(redisConnectionFactory());
+        return template;
+    }
+}
+java
+복사
+// 패키지: com.example.datadistributor.redis
+package com.example.datadistributor.redis;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
+
+@Service
+public class RedisCacheService {
+
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+
+    // 예시: JSON 파싱 후 각 코인별 최신 가격 업데이트 (여기서는 단순 문자열 업데이트)
+    public void updateCache(String message) {
+        // 실제 구현에서는 메시지를 파싱하여 코인 코드와 가격 정보를 분리해야 함.
+        // 예를 들어: {"code":"BTC", "price":"50000"} 형태의 JSON이라 가정.
+        // JSON 파싱 예시 생략하고 간단하게 코인 코드를 key로 사용.
+        String coinCode = extractCoinCode(message); // 구현 필요
+        redisTemplate.opsForValue().set("price:" + coinCode, message);
+        System.out.println("Redis 캐시 업데이트: price:" + coinCode);
+    }
+
+    // 메시지에서 코인 코드를 추출하는 예시 메서드
+    private String extractCoinCode(String message) {
+        // 실제 JSON 파싱 로직으로 대체 (예: Jackson 사용)
+        // 여기서는 간단히 "BTC" 리턴
+        return "BTC";
+    }
+}
+3.2.3 웹소켓 서버 설정 및 클라이언트 연결
+java
+복사
+// 패키지: com.example.datadistributor.config
+package com.example.datadistributor.config;
+
+import com.example.datadistributor.controller.CoinPriceWebSocketHandler;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.socket.config.annotation.*;
+
+@Configuration
+@EnableWebSocket
+public class WebSocketServerConfig implements WebSocketConfigurer {
+
+    @Override
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        registry.addHandler(new CoinPriceWebSocketHandler(), "/ws/coin-price")
+                .setAllowedOrigins("*");
+    }
+}
+java
+복사
+// 패키지: com.example.datadistributor.controller
+package com.example.datadistributor.controller;
+
+import com.example.datadistributor.redis.RedisCacheService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.socket.*;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
+
+public class CoinPriceWebSocketHandler extends TextWebSocketHandler {
+
+    @Autowired
+    private RedisCacheService redisCacheService;
+
+    @Override
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        // 클라이언트가 연결되면 바로 최신 데이터를 보낼 수 있도록 처리
+        String latestPrice = redisCacheService.getLatestPrice("BTC"); // 예시: BTC만
+        session.sendMessage(new TextMessage(latestPrice));
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        // 클라이언트가 특정 코인 정보를 요청하면 해당 정보 제공
+        String coinCode = message.getPayload();
+        String latestPrice = redisCacheService.getLatestPrice(coinCode);
+        session.sendMessage(new TextMessage(latestPrice));
+    }
+}
+java
+복사
+// RedisCacheService에 최신 데이터 조회 메서드 추가 (com.example.datadistributor.redis.RedisCacheService)
+public String getLatestPrice(String coinCode) {
+    return redisTemplate.opsForValue().get("price:" + coinCode);
+}
+3.2.4 데이터 처리 서비스 (필터링 등 추가 비즈니스 로직)
+java
+복사
+// 패키지: com.example.datadistributor.service
+package com.example.datadistributor.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import com.example.datadistributor.redis.RedisCacheService;
+
+@Service
+public class CoinPriceService {
+
+    @Autowired
+    private RedisCacheService redisCacheService;
+
+    // 클라이언트의 요청에 따라 원하는 코인 데이터를 반환 (여기서는 단순 조회)
+    public String getCoinPrice(String coinCode) {
+        return redisCacheService.getLatestPrice(coinCode);
+    }
+}
+3.2.5 Application 클래스
+java
+복사
+// 패키지: com.example.datadistributor
+package com.example.datadistributor;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class DatadistributorApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(DatadistributorApplication.class, args);
+    }
+}
+4. Pinpoint 에이전트 통합
+각 서비스(데이터 수집, 데이터 처리)에서 Pinpoint 에이전트를 사용하기 위해서는 다음과 같이 진행합니다.
+
+Pinpoint Agent 설정 파일 (예: pinpoint.config 또는 pinpoint.config를 클래스패스에 포함)
+
+에이전트 설정 파일에 서비스명, 애플리케이션 이름, Collector 서버 주소 등 설정
+JVM 옵션 추가
+
+애플리케이션 실행 시 Pinpoint 에이전트 jar 파일을 로드하도록 JVM 옵션에 -javaagent:/path/to/pinpoint-bootstrap.jar 추가
+각 서비스의 배포
+
+데이터 수집 서비스와 데이터 처리 서비스 모두에 위 옵션과 설정 파일을 적용하여 에이전트를 부착
+이를 통해 Pinpoint 대시보드에서 두 서비스 간 호출, 응답시간, 에러 등을 추적하고 모니터링할 수 있습니다.
+
+5. 전체 흐름 요약
+데이터 수집 측면 (Main Backend):
+
+거래소 웹소켓 연결 → 수신 메시지를 Kafka Producer로 전송
+거래소와의 연결 관리는 단일(또는 제한된) 인스턴스로 운영하여 API 제한 회피
+데이터 분배 및 처리 측면 (Sub Backend):
+
+Kafka Consumer가 메시지를 수신 → Redis 캐시 업데이트
+웹소켓 서버(또는 REST API)가 Redis의 최신 데이터를 클라이언트에 제공
+클라이언트는 필요 시 특정 코인 데이터를 요청하거나 실시간 구독
+모니터링:
+
+모든 서비스에 Pinpoint 에이전트 적용 → 분산 추적 및 성능 모니터링
+이와 같이 구성하면 각 역할(데이터 수집, 메시지 분배, 실시간 제공)을 명확하게 분리하면서 확장성과 안정성을 확보할 수 있습니다.
+위 예시 코드는 개념 증명을 위한 단순화된 형태이며, 실제 구현 시에는 에러 핸들링, JSON 파싱, 보안 설정, 설정 파일 관리 등을 추가해야 합니다.
+
+이 문서를 참고하여 코드를 구현하면 전체 아키텍처의 흐름을 이해하고 각 컴포넌트의 역할을 분리하는 데 도움이 될 것입니다.
+
+
+
+
+
+
+##################################
+
+메인 백엔드:
+모든 코인 데이터 수집
+// 업비트
+"[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"ticker\",\"codes\":[\"ALL\"]}]"  // 모든 마켓 구독
+
+// 빗썸
+"{\"type\":\"ticker\",\"symbols\":[\"ALL\"],\"tickTypes\":[\"24H\"]}"  // 모든 심볼 구독
+
+// 바이낸스
+"{\"method\":\"SUBSCRIBE\",\"params\":[\"!ticker@arr\"],\"id\":1}"  // 모든 티커 구독
+수집된 데이터를 Kafka로 전송
+원본 데이터 그대로 유지 (KRW, USDT 가격 모두)
+서브 백엔드:
+Kafka에서 데이터 수신
+클라이언트 요청에 따라 필터링
+특정 코인만 선택
+원하는 마켓만 선택 (KRW/USDT)
+특정 거래소만 선택
+WebSocket을 통해 클라이언트에 실시간 전송
+이런 구조가 좋을 것 같습니다!
+ㅁㄴㅇㅁㄴㅇ
+##################################################
