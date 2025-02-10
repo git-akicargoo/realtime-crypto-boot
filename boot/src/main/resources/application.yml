@@ -43,6 +43,19 @@ exchange:
         - BTC     # BTC 마켓
         - USDT    # USDT 마켓
 
+app:
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:*}
+  kafka:
+    topic:
+      trades: exchange.trades
+
+# 공통 설정에 group-id 추가
+spring:
+  kafka:
+    consumer:
+      group-id: exchange-group    # 모든 환경에서 공통으로 사용할 group-id
+
 ---
 # 로컬 개발 환경
 spring:
@@ -50,10 +63,16 @@ spring:
     activate:
       on-profile: local
   kafka:
-    enabled: false
+    enabled: true
+    bootstrap-servers: localhost:9092
+    consumer:
+      auto-offset-reset: latest
+      properties:
+        session.timeout.ms: 10000
+        heartbeat.interval.ms: 3000
 
 ---
-# 도커 개발 환경
+# Docker Compose 환경
 spring:
   config:
     activate:
@@ -62,14 +81,13 @@ spring:
     enabled: true
     bootstrap-servers: kafka:9092
     consumer:
-      group-id: exchange-group
       auto-offset-reset: latest
       properties:
-        session.timeout.ms: 10000        # 10초
-        heartbeat.interval.ms: 3000      # 3초
+        session.timeout.ms: 10000
+        heartbeat.interval.ms: 3000
 
 ---
-# 운영 환경
+# AWS 운영 환경
 spring:
   config:
     activate:
@@ -78,8 +96,18 @@ spring:
     enabled: true
     bootstrap-servers: ${KAFKA_SERVERS}
     consumer:
-      group-id: exchange-group
       auto-offset-reset: latest
+      properties:
+        session.timeout.ms: 10000
+        heartbeat.interval.ms: 3000
+        security.protocol: SASL_SSL
+        sasl.mechanism: AWS_MSK_IAM
+        sasl.jaas.config: ${KAFKA_JAAS_CONFIG}
+        sasl.client.callback.handler.class: software.amazon.msk.auth.iam.IAMClientCallbackHandler
+
+app:
+  websocket:
+    allowed-origins: https://*.yourdomain.com
 
 
 

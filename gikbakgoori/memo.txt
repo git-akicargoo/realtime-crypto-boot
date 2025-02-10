@@ -1,0 +1,198 @@
+com.example.boot
+├── layer1_websocket_manager
+│   ├── connection
+│   │   ├── WebSocketConnectionManager
+│   │   └── SessionManager
+│   └── config
+│       └── WebSocketConfig
+│
+├── layer2_kafka_leader
+│   ├── election
+│   │   ├── LeaderElectionCoordinator  # Service -> Coordinator로 변경
+│   │   └── KafkaLeaderManager
+│   └── config
+│       └── KafkaConfig
+│
+├── layer3_exchange_subscription
+│   ├── manager
+│   │   └── SubscriptionManager
+│   └── model
+│       └── SubscriptionRequest
+│
+├── layer4_exchange_data
+│   ├── manager
+│   │   └── ExchangeDataManager
+│   └── model
+│       └── ExchangeData
+│
+└── service
+    ├── price
+    │   ├── PriceService        # 가격 데이터 가공
+    │   └── PriceAnalyzer      # 가격 분석
+    │
+    ├── storage
+    │   ├── DataStorageService  # DB 저장
+    │   └── CacheService       # Redis 캐싱
+    │
+    └── analysis
+        └── ArbitrageService   # 재정거래 분석
+
+==========================================================
+... (기존 패키지 구조 유지) ...
+
+코드 리팩토링 상세 계획:
+
+1. AbstractWebSocketManager 분리
+현재 문제점:
+- 단일 클래스가 너무 많은 책임을 가짐
+- 연결, 세션관리, 메시지 처리, 구독 처리 모두 포함
+- currency 하드코딩된 부분 존재
+- 거래소별 메시지 포맷 로직이 섞여있음
+
+분리 대상:
+a) SessionManager
+- 세션 관리 책임만 담당
+- sessions ConcurrentHashMap 이관
+- 세션 상태 관리 메서드 포함
+
+b) WebSocketConnectionManager
+- WebSocket 연결 관리만 담당
+- connectToExchanges() 메서드 이관
+- 연결 재시도 로직 추가
+
+c) MessageFormatHandler
+- 메시지 포맷 관련 로직 분리
+- createSubscribeMessage()
+- createUnsubscribeMessage()
+- 설정 기반 동적 처리
+
+2. 구독 처리 개선
+현재 문제점:
+- 구독 로직이 AbstractWebSocketManager에 섞여있음
+- ExchangeConfigVO의 설정 미활용
+- 구독 상태 관리 부재
+
+개선 계획:
+a) SubscriptionManager 구현
+- 구독 상태 관리
+- 설정 기반 자동 구독
+- 재연결 시 재구독
+- ExchangeConfigVO 활용
+
+b) 구독 처리 흐름
+1. 리더 선출
+2. WebSocket 연결
+3. 설정 기반 구독 시작
+4. 구독 상태 모니터링
+
+3. 리더십 관리 개선
+현재 문제점:
+- KafkaWebSocketManager에 리더십 관리가 섞여있음
+- 리더십 변경 시 처리가 불완전
+
+개선 계획:
+a) LeaderElectionCoordinator 구현
+- 리더십 상태 관리
+- 리더십 변경 이벤트 처리
+- 구독 관리자와 연동
+
+b) 리더십 처리 흐름
+1. Kafka 파티션 할당
+2. 리더십 확인
+3. WebSocket 연결 관리
+4. 구독 처리 시작
+
+4. 구현 순서:
+Phase 1: 기반 구조 개선
+1. SessionManager 구현
+2. WebSocketConnectionManager 구현
+3. MessageFormatHandler 구현
+
+Phase 2: 리더십 관리
+1. LeaderElectionCoordinator 구현
+2. KafkaWebSocketManager 리팩토링
+3. 리더십 변경 처리 개선
+
+Phase 3: 구독 관리
+1. SubscriptionManager 구현
+2. 설정 기반 구독 처리
+3. 재연결 시 재구독 구현
+
+Phase 4: 모니터링 추가
+1. 연결 상태 모니터링
+2. 구독 상태 모니터링
+3. 리더십 상태 모니터링
+
+주의사항:
+1. 각 단계별 테스트 코드 작성
+2. 기존 기능 유지하면서 점진적 변경
+3. 장애 상황 고려한 복구 로직 구현
+4. 로깅 및 모니터링 강화
+
+이 문서는 구현 진행 상황에 따라 지속적으로 업데이트 예정
+
+
+
+
+============================================================
+
+데이터 흐름:
+1. layer1_websocket_manager: 소켓 연결/관리
+2. layer2_kafka_leader: 리더 선출
+3. layer3_subscription: 구독 관리
+4. layer4_exchange: 거래소 데이터 수신/처리
+5. service: 비즈니스 로직
+
+현재 코드 문제점 및 개선사항:
+
+1. 하드코딩된 값들
+- 현재 AbstractWebSocketManager의 currency 하드코딩:
+  case "binance" -> "usdt"
+  case "upbit", "bithumb" -> "krw"
+- 개선: ExchangeConfigVO의 설정 사용
+  config.getExchanges().getBinance().getSupportedCurrencies()
+
+2. 구독 처리
+- 현재: 구독 메시지 포맷만 존재
+- 개선 필요:
+  - ExchangeConfigVO의 supportedSymbols 활용
+  - 리더 선출 시 자동 구독
+  - 구독 상태 관리
+  - 재연결 시 재구독
+
+3. 리더십 관리
+- LeaderElectionService -> LeaderElectionCoordinator로 변경
+- 리더십 변경 시 구독 처리 연동
+- 장애 복구 고려
+
+구현 계획:
+
+1. Phase 1: 설정 기반 구독 처리
+- SubscriptionManager 구현
+- ExchangeConfigVO 설정 활용
+- 구독 상태 관리 추가
+
+2. Phase 2: 리더십 처리
+- LeaderElectionCoordinator 구현
+- 리더십 변경 시 구독 처리
+- 장애 복구 로직
+
+3. Phase 3: 데이터 처리
+- ExchangeDataManager 구현
+- Kafka 연동
+- 데이터 검증/가공
+
+주의사항:
+1. 기존 기능 유지하면서 점진적 리팩토링
+2. 각 레이어 책임 명확히 분리
+3. 테스트 용이성 확보
+4. 모니터링 추가
+
+다음 단계:
+1. SubscriptionManager 구현
+2. LeaderElectionCoordinator 구현
+3. ExchangeDataManager 구현
+4. 테스트 코드 작성
+5. 모니터링 추가
+
+이 문서는 구현 진행 상황과 새로운 요구사항 반영하여 지속 업데이트 예정
