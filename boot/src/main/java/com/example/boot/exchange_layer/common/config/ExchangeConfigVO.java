@@ -1,4 +1,4 @@
-package com.example.boot.config;
+package com.example.boot.exchange_layer.common.config;
 
 import java.util.List;
 
@@ -60,4 +60,4 @@ public class ExchangeConfigVO {
     public static class Exchange {
         private List<String> supportedCurrencies;
     }
-}
+} 

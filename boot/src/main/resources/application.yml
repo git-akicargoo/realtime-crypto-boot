@@ -1,6 +1,10 @@
 spring:
   profiles:
     active: local
+  kafka:
+    enabled: false  # 기본값은 false로 설정
+    consumer:
+      group-id: exchange-group    # 모든 환경에서 공통으로 사용할 group-id
 
 server:
   port: 8080
@@ -49,12 +53,9 @@ app:
   kafka:
     topic:
       trades: exchange.trades
-
-# 공통 설정에 group-id 추가
-spring:
-  kafka:
-    consumer:
-      group-id: exchange-group    # 모든 환경에서 공통으로 사용할 group-id
+      leader: exchange.data    # 리더 선출용 토픽
+    leader:
+      partition: 0            # 리더 선출용 파티션 번호
 
 ---
 # 로컬 개발 환경

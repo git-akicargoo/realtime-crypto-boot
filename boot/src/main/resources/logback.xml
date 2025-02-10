@@ -2,12 +2,25 @@
 <configuration>
     <!-- 색상 설정 -->
     <conversionRule conversionWord="clr" converterClass="org.springframework.boot.logging.logback.ColorConverter" />
+    <conversionRule conversionWord="wex" converterClass="org.springframework.boot.logging.logback.WhitespaceThrowableProxyConverter" />
+    <conversionRule conversionWord="wEx" converterClass="org.springframework.boot.logging.logback.ExtendedWhitespaceThrowableProxyConverter" />
 
+    <!-- 콘솔 애플리케이더 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %clr(%-5level) %clr(%logger{36}){cyan} - %clr(%msg){magenta}%n</pattern>
+            <pattern>
+                %clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr([%logger{0}]){cyan} %clr(:){faint} %m%n
+            </pattern>
         </encoder>
     </appender>
+
+    <!-- 로그 레벨 설정 -->
+    <logger name="com.example.boot" level="DEBUG"/>
+    <logger name="org.springframework" level="INFO"/>
+    <logger name="org.springframework.web" level="INFO"/>
+    
+    <!-- 테스트 관련 패키지는 DEBUG 레벨로 설정 -->
+    <logger name="com.example.boot.exchange_layer.layer3_exchange_protocol" level="DEBUG"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE" />

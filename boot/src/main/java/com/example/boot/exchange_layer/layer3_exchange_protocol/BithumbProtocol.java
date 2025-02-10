@@ -10,11 +10,17 @@ import com.example.boot.exchange_layer.layer3_exchange_protocol.model.CurrencyPa
 @Component
 public class BithumbProtocol implements ExchangeProtocol {
     
+    /**
+     * Bithumb WebSocket 구독 메시지 포맷:
+     * {
+     *   "type": "transaction",
+     *   "symbols": ["BTC_KRW"]  // 대문자, _ 구분자 사용
+     * }
+     */
     @Override
     public String createSubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
         String symbols = pairs.stream()
             .map(CurrencyPair::formatForBithumb)
-            .map(pair -> String.format("\"%s\"", pair))
             .collect(Collectors.joining(","));
             
         return String.format(messageFormat, symbols);
@@ -24,7 +30,6 @@ public class BithumbProtocol implements ExchangeProtocol {
     public String createUnsubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
         String symbols = pairs.stream()
             .map(CurrencyPair::formatForBithumb)
-            .map(pair -> String.format("\"%s\"", pair))
             .collect(Collectors.joining(","));
             
         return String.format(messageFormat, symbols);

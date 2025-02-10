@@ -4,6 +4,7 @@ import java.util.Collection;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.example.boot.exchange_layer.layer2_kafka_leader.election.LeaderElector;
@@ -17,14 +18,16 @@ import lombok.extern.slf4j.Slf4j;
 public class KafkaRebalanceListener implements ConsumerRebalanceListener {
     
     private final LeaderElector leaderElector;
-    private static final String LEADER_PARTITION = "exchange.data";
-    private static final int LEADER_PARTITION_NUMBER = 0;
+    @Value("${app.kafka.topic.leader}")
+    private String leaderTopic;
+    @Value("${app.kafka.leader.partition}")
+    private int leaderPartition;
     
     @Override
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
         boolean isLeader = partitions.stream()
-            .anyMatch(p -> p.topic().equals(LEADER_PARTITION) && 
-                         p.partition() == LEADER_PARTITION_NUMBER);
+            .anyMatch(p -> p.topic().equals(leaderTopic) && 
+                         p.partition() == leaderPartition);
             
         if (isLeader) {
             leaderElector.onLeaderElected()

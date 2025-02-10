@@ -10,11 +10,25 @@ import com.example.boot.exchange_layer.layer3_exchange_protocol.model.CurrencyPa
 @Component
 public class UpbitProtocol implements ExchangeProtocol {
     
+    /**
+     * Upbit WebSocket 구독 메시지 포맷:
+     * [
+     *   {
+     *     "ticket": "UNIQUE_TICKET"
+     *   },
+     *   {
+     *     "type": "trade",
+     *     "codes": ["KRW-BTC"]  // 대문자, - 구분자 사용
+     *   },
+     *   {
+     *     "format": "SIMPLE"
+     *   }
+     * ]
+     */
     @Override
     public String createSubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
         String codes = pairs.stream()
             .map(CurrencyPair::formatForUpbit)
-            .map(pair -> String.format("\"%s\"", pair))
             .collect(Collectors.joining(","));
             
         return String.format(messageFormat, codes);
@@ -24,7 +38,6 @@ public class UpbitProtocol implements ExchangeProtocol {
     public String createUnsubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
         String codes = pairs.stream()
             .map(CurrencyPair::formatForUpbit)
-            .map(pair -> String.format("\"%s\"", pair))
             .collect(Collectors.joining(","));
             
         return String.format(messageFormat, codes);

@@ -1,5 +1,6 @@
 package com.example.boot.exchange_layer.layer6_message_broker.consumer;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
 public class TradeMessageConsumer {
     
     private final ClientSessionManager sessionManager;

@@ -10,10 +10,18 @@ import com.example.boot.exchange_layer.layer3_exchange_protocol.model.CurrencyPa
 @Component
 public class BinanceProtocol implements ExchangeProtocol {
     
+    /**
+     * Binance WebSocket 구독 메시지 포맷:
+     * {
+     *   "method": "SUBSCRIBE",
+     *   "params": ["btcusdt@trade"],  // lowercase, @ 구분자 사용
+     *   "id": 1
+     * }
+     */
     @Override
     public String createSubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
         String params = pairs.stream()
-            .map(pair -> String.format("\"%s@trade\"", pair.formatForBinance()))
+            .map(pair -> (pair.getSymbol() + pair.getQuoteCurrency()).toLowerCase())
             .collect(Collectors.joining(","));
             
         return String.format(messageFormat, params);
@@ -22,7 +30,7 @@ public class BinanceProtocol implements ExchangeProtocol {
     @Override
     public String createUnsubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
         String params = pairs.stream()
-            .map(pair -> String.format("\"%s@trade\"", pair.formatForBinance()))
+            .map(pair -> (pair.getSymbol() + pair.getQuoteCurrency()).toLowerCase())
             .collect(Collectors.joining(","));
             
         return String.format(messageFormat, params);

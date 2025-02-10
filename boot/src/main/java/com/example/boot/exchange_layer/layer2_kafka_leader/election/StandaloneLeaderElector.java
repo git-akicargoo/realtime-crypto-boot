@@ -13,21 +13,19 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
-public class KafkaLeaderElector implements LeaderElector {
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "false", matchIfMissing = true)
+public class StandaloneLeaderElector implements LeaderElector {
     
     private final ApplicationEventPublisher eventPublisher;
-    private volatile boolean isLeader = false;
     
     @Override
     public Mono<Boolean> isLeader() {
-        return Mono.just(isLeader);
+        return Mono.just(true);  // 항상 리더
     }
     
     @Override
     public Mono<Void> onLeaderElected() {
-        log.info("Leader elected - initializing connections");
-        isLeader = true;
+        log.info("Standalone mode - always leader");
         return Mono.fromRunnable(() -> 
             eventPublisher.publishEvent(new LeaderElectedEvent())
         );
@@ -35,8 +33,6 @@ public class KafkaLeaderElector implements LeaderElector {
     
     @Override
     public Mono<Void> onLeaderRevoked() {
-        log.info("Leadership revoked - closing connections");
-        isLeader = false;
-        return Mono.empty(); // 필요한 경우 리더 해제 이벤트도 추가 가능
+        return Mono.empty();  // 단독 실행에서는 리더 권한이 취소되지 않음
     }
 } 
