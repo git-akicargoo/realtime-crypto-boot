@@ -11,6 +11,10 @@ server:
 
 # 공통 설정
 exchange:
+  connection:
+    max-retry-attempts: 3
+    reconnect-delay: 1000      # 1초
+    connection-timeout: 30000   # 5초 -> 30초로 증가
   websocket:
     binance: wss://stream.binance.com:9443/ws
     upbit: wss://api.upbit.com/websocket/v1
@@ -50,6 +54,10 @@ exchange:
 app:
   websocket:
     allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:*}
+    connection:
+      max-retry-attempts: 3
+      reconnect-delay: 1000
+      connection-timeout: 5000
   kafka:
     topic:
       trades: exchange.trades

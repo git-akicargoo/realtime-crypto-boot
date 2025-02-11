@@ -1,0 +1,75 @@
+package com.example.boot.exchange.layer1_core.config;
+
+import java.util.List;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.NestedConfigurationProperty;
+import org.springframework.stereotype.Component;
+
+import lombok.Getter;
+import lombok.Setter;
+
+@Component
+@ConfigurationProperties(prefix = "exchange", ignoreInvalidFields = true)
+@Getter
+@Setter
+public class ExchangeConfig {
+    private WebSocket websocket;
+    
+    @NestedConfigurationProperty
+    private MessageFormat messageFormat;
+    private Common common;
+    private Exchanges exchanges;
+    private Connection connection;
+
+    @Getter
+    @Setter
+    public static class WebSocket {
+        private String binance;
+        private String upbit; 
+        private String bithumb;
+    }
+
+    @Getter
+    @Setter
+    public static class MessageFormat {
+        private ExchangeFormat binance;
+        private ExchangeFormat upbit;
+        private ExchangeFormat bithumb;
+    }
+
+    @Getter
+    @Setter
+    public static class ExchangeFormat {
+        private String subscribe;
+        private String unsubscribe;
+    }
+
+    @Getter
+    @Setter
+    public static class Common {
+        private List<String> supportedSymbols;
+    }
+
+    @Getter
+    @Setter
+    public static class Exchanges {
+        private Exchange binance;
+        private Exchange upbit;
+        private Exchange bithumb;
+    }
+
+    @Getter
+    @Setter
+    public static class Exchange {
+        private List<String> supportedCurrencies;
+    }
+
+    @Getter
+    @Setter
+    public static class Connection {
+        private int maxRetryAttempts = 3;
+        private long reconnectDelay = 1000L;
+        private long connectionTimeout = 5000L;
+    }
+} 

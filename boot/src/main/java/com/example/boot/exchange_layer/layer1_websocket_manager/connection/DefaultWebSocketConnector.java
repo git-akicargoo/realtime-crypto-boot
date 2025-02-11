@@ -25,12 +25,17 @@ public class DefaultWebSocketConnector implements WebSocketConnector {
     public Mono<WebSocketSession> connect(String exchange, String url) {
         log.info("Connecting to {} WebSocket: {}", exchange, url);
         
-        return client.execute(URI.create(url), session -> {
-            log.info("Connected to {} WebSocket", exchange);
-            return sessionManager.registerSession(exchange, session)
-                   .then();
-        })
-        .then(sessionManager.getSession(exchange));
+        return Mono.create(sink -> {
+            client.execute(URI.create(url), session -> {
+                log.info("Connected to {} WebSocket", exchange);
+                
+                return sessionManager.registerSession(exchange, session)
+                    .doOnSuccess(registeredSession -> {
+                        sink.success(registeredSession);  // 세션이 성공적으로 등록되면 반환
+                    })
+                    .then();
+            }).subscribe(null, sink::error);  // 에러 처리
+        });
     }
     
     @Override
