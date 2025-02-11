@@ -14,21 +14,11 @@ exchange:
   connection:
     max-retry-attempts: 3
     reconnect-delay: 1000      # 1초
-    connection-timeout: 30000   # 5초 -> 30초로 증가
+    connection-timeout: 30000   # 30초
   websocket:
     binance: wss://stream.binance.com:9443/ws
     upbit: wss://api.upbit.com/websocket/v1
     bithumb: wss://pubwss.bithumb.com/pub/ws
-  message-format:
-    binance:
-      subscribe: '{"method":"SUBSCRIBE","params":["%s@trade"],"id":1}'
-      unsubscribe: '{"method":"UNSUBSCRIBE","params":["%s@trade"],"id":1}'
-    upbit:
-      subscribe: '[{"ticket":"UNIQUE_TICKET"},{"type":"trade","codes":["%s"]},{"format":"SIMPLE"}]'
-      unsubscribe: '[{"ticket":"UNIQUE_TICKET"},{"type":"trade","codes":["%s"]},{"format":"SIMPLE"}]'
-    bithumb:
-      subscribe: '{"type":"transaction","symbols":["%s"]}'
-      unsubscribe: '{"type":"transaction","symbols":["%s"]}'
   common:
     supported-symbols:
       - BTC
@@ -38,18 +28,18 @@ exchange:
   exchanges:
     binance:
       supported-currencies:
-        - USDT    # 가장 많이 사용되는 스테이블코인
-        - BTC     # BTC 마켓
+        - USDT
+        - BTC
     upbit:
       supported-currencies:
-        - KRW     # 원화 마켓
-        - BTC     # BTC 마켓
-        - USDT    # USDT 마켓 (일부 거래쌍)
+        - KRW
+        - BTC
+        - USDT
     bithumb:
       supported-currencies:
-        - KRW     # 원화 마켓
-        - BTC     # BTC 마켓
-        - USDT    # USDT 마켓
+        - KRW
+        - BTC
+        - USDT
 
 app:
   websocket:

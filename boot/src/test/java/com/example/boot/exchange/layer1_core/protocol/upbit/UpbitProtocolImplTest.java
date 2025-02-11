@@ -41,12 +41,12 @@ class UpbitProtocolImplTest {
         );
         
         // when
-        String message = protocol.createSubscribeMessage(pairs, subscribeFormat);
+        String message = protocol.createSubscribeMessage(pairs, null);
         log.info("Upbit subscribe message: {}", message);
         
         // then
         assertThat(message).isEqualTo(
-            "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[\"KRW-BTC\",\"KRW-ETH\"]}]"
+            "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[\"KRW-BTC\",\"KRW-ETH\"]},{\"format\":\"SIMPLE\"}]"
         );
     }
     

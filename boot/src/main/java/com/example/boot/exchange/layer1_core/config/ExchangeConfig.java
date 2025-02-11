@@ -3,7 +3,6 @@ package com.example.boot.exchange.layer1_core.config;
 import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.NestedConfigurationProperty;
 import org.springframework.stereotype.Component;
 
 import lombok.Getter;
@@ -15,9 +14,6 @@ import lombok.Setter;
 @Setter
 public class ExchangeConfig {
     private WebSocket websocket;
-    
-    @NestedConfigurationProperty
-    private MessageFormat messageFormat;
     private Common common;
     private Exchanges exchanges;
     private Connection connection;
@@ -28,21 +24,6 @@ public class ExchangeConfig {
         private String binance;
         private String upbit; 
         private String bithumb;
-    }
-
-    @Getter
-    @Setter
-    public static class MessageFormat {
-        private ExchangeFormat binance;
-        private ExchangeFormat upbit;
-        private ExchangeFormat bithumb;
-    }
-
-    @Getter
-    @Setter
-    public static class ExchangeFormat {
-        private String subscribe;
-        private String unsubscribe;
     }
 
     @Getter
@@ -70,6 +51,6 @@ public class ExchangeConfig {
     public static class Connection {
         private int maxRetryAttempts = 3;
         private long reconnectDelay = 1000L;
-        private long connectionTimeout = 5000L;
+        private long connectionTimeout = 30000L;
     }
 } 

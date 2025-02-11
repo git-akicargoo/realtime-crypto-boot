@@ -21,11 +21,16 @@ public class BinanceProtocolImpl implements BinanceExchangeProtocol {
      */
     @Override
     public String createSubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
+        // 각 페어를 "btcusdt@trade" 형식의 문자열로 변환하고 쌍따옴표로 감싸기
         String params = pairs.stream()
-            .map(pair -> pair.formatForBinance() + "@trade")
-            .collect(Collectors.joining("\",\""));
-            
-        return String.format(messageFormat, params);
+            .map(pair -> "\"" + pair.formatForBinance() + "@trade" + "\"")
+            .collect(Collectors.joining(","));
+        
+        // 최종 메시지 생성
+        return String.format(
+            "{\"method\":\"SUBSCRIBE\",\"params\":[%s],\"id\":1}",
+            params
+        );
     }
     
     @Override

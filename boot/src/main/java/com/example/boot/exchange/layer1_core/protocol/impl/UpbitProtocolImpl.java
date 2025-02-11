@@ -25,11 +25,16 @@ public class UpbitProtocolImpl implements UpbitExchangeProtocol {
      */
     @Override
     public String createSubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
+        // 각 페어를 "KRW-BTC" 형식의 문자열로 변환하고 쌍따옴표로 감싸기
         String codes = pairs.stream()
-            .map(CurrencyPair::formatForUpbit)
-            .collect(Collectors.joining("\",\""));
-            
-        return String.format(messageFormat, codes);
+            .map(pair -> "\"" + pair.formatForUpbit() + "\"")
+            .collect(Collectors.joining(","));
+        
+        // 최종 메시지 생성
+        return String.format(
+            "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[%s]},{\"format\":\"SIMPLE\"}]",
+            codes
+        );
     }
     
     @Override
