@@ -5,8 +5,8 @@ import java.util.List;
 import com.example.boot.exchange.layer1_core.model.CurrencyPair;
 
 public interface BaseExchangeProtocol {
-    String createSubscribeMessage(List<CurrencyPair> pairs, String messageFormat);
-    String createUnsubscribeMessage(List<CurrencyPair> pairs, String messageFormat);
+    String createSubscribeMessage(List<CurrencyPair> pairs);
+    String createUnsubscribeMessage(List<CurrencyPair> pairs);
     boolean supports(String exchange);
     String getExchangeName();
 } 

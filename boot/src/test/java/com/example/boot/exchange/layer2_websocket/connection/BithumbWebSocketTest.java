@@ -32,7 +32,6 @@ public class BithumbWebSocketTest {
             new CurrencyPair("KRW", "BTC"),
             new CurrencyPair("KRW", "ETH")
         );
-        String messageFormat = "{\"type\":\"transaction\",\"symbols\":[\"%s_%s\"]}";
 
         // When
         Flux<MessageHandler> connection = connectionFactory.createConnection(exchange, url);
@@ -41,7 +40,7 @@ public class BithumbWebSocketTest {
             log.info("Connected to Bithumb WebSocket");
             
             // Subscribe message 전송
-            String subscribeMessage = bithumbProtocol.createSubscribeMessage(pairs, messageFormat);
+            String subscribeMessage = bithumbProtocol.createSubscribeMessage(pairs);
             log.info("Sending subscribe message: {}", subscribeMessage);
             
             return handler.sendMessage(subscribeMessage)
@@ -55,7 +54,7 @@ public class BithumbWebSocketTest {
         .subscribe();
 
         try {
-            Thread.sleep(30000);
+            Thread.sleep(3000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

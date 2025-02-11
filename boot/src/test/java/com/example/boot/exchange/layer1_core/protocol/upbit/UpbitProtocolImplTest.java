@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -22,14 +21,14 @@ class UpbitProtocolImplTest {
     @Autowired
     private UpbitExchangeProtocol protocol;
     
-    private String subscribeFormat;
-    private String unsubscribeFormat;
+    // private String subscribeFormat;
+    // private String unsubscribeFormat;
     
-    @BeforeEach
-    void setUp() {
-        subscribeFormat = "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[\"%s\"]}]";
-        unsubscribeFormat = "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[\"%s\"]}]";
-    }
+    // @BeforeEach
+    // void setUp() {
+    //     subscribeFormat = "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[\"%s\"]}]";
+    //     unsubscribeFormat = "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[\"%s\"]}]";
+    // }
     
     @Test
     @DisplayName("업비트 구독 메시지 포맷 테스트")
@@ -41,7 +40,7 @@ class UpbitProtocolImplTest {
         );
         
         // when
-        String message = protocol.createSubscribeMessage(pairs, null);
+        String message = protocol.createSubscribeMessage(pairs);
         log.info("Upbit subscribe message: {}", message);
         
         // then
@@ -60,7 +59,7 @@ class UpbitProtocolImplTest {
         );
         
         // when
-        String message = protocol.createUnsubscribeMessage(pairs, unsubscribeFormat);
+        String message = protocol.createUnsubscribeMessage(pairs);
         log.info("Upbit unsubscribe message: {}", message);
         
         // then

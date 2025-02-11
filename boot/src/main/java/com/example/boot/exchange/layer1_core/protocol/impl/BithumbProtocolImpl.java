@@ -19,14 +19,12 @@ public class BithumbProtocolImpl implements BithumbExchangeProtocol {
      * }
      */
     @Override
-    public String createSubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
-        // 각 페어를 "BTC_KRW" 형식의 문자열로 변환하고 쌍따옴표로 감싸기
+    public String createSubscribeMessage(List<CurrencyPair> pairs) {
         String symbols = pairs.stream()
             .map(CurrencyPair::formatForBithumb)
             .map(symbol -> "\"" + symbol + "\"")
             .collect(Collectors.joining(","));
         
-        // 최종 메시지 생성
         return String.format(
             "{\"type\":\"transaction\",\"symbols\":[%s]}",
             symbols
@@ -34,12 +32,16 @@ public class BithumbProtocolImpl implements BithumbExchangeProtocol {
     }
     
     @Override
-    public String createUnsubscribeMessage(List<CurrencyPair> pairs, String messageFormat) {
+    public String createUnsubscribeMessage(List<CurrencyPair> pairs) {
         String symbols = pairs.stream()
             .map(CurrencyPair::formatForBithumb)
-            .collect(Collectors.joining("\",\""));
+            .map(symbol -> "\"" + symbol + "\"")
+            .collect(Collectors.joining(","));
             
-        return String.format(messageFormat, symbols);
+        return String.format(
+            "{\"type\":\"transaction\",\"symbols\":[%s]}",
+            symbols
+        );
     }
     
     @Override

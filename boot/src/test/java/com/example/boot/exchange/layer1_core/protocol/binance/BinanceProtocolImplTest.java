@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -22,14 +21,14 @@ class BinanceProtocolImplTest {
     @Autowired
     private BinanceExchangeProtocol protocol;
     
-    private String subscribeFormat;
-    private String unsubscribeFormat;
+    // private String subscribeFormat;
+    // private String unsubscribeFormat;
     
-    @BeforeEach
-    void setUp() {
-        subscribeFormat = "{\"method\":\"SUBSCRIBE\",\"params\":[\"%s\"],\"id\":1}";
-        unsubscribeFormat = "{\"method\":\"UNSUBSCRIBE\",\"params\":[\"%s\"],\"id\":1}";
-    }
+    // @BeforeEach
+    // void setUp() {
+    //     subscribeFormat = "{\"method\":\"SUBSCRIBE\",\"params\":[\"%s\"],\"id\":1}";
+    //     unsubscribeFormat = "{\"method\":\"UNSUBSCRIBE\",\"params\":[\"%s\"],\"id\":1}";
+    // }
     
     @Test
     @DisplayName("바이낸스 구독 메시지 포맷 테스트")
@@ -41,7 +40,7 @@ class BinanceProtocolImplTest {
         );
         
         // when
-        String message = protocol.createSubscribeMessage(pairs, subscribeFormat);
+        String message = protocol.createSubscribeMessage(pairs);
         log.info("Binance subscribe message: {}", message);
         
         // then
@@ -60,7 +59,7 @@ class BinanceProtocolImplTest {
         );
         
         // when
-        String message = protocol.createUnsubscribeMessage(pairs, unsubscribeFormat);
+        String message = protocol.createUnsubscribeMessage(pairs);
         log.info("Binance unsubscribe message: {}", message);
         
         // then

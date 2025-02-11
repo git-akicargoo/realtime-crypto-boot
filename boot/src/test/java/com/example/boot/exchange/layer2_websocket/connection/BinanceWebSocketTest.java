@@ -32,7 +32,6 @@ public class BinanceWebSocketTest {
             new CurrencyPair("USDT", "BTC"),
             new CurrencyPair("USDT", "ETH")
         );
-        String messageFormat = "{\"method\": \"SUBSCRIBE\",\"params\": [\"%s@trade\"],\"id\": 1}";
 
         // When
         Flux<MessageHandler> connection = connectionFactory.createConnection(exchange, url);
@@ -41,7 +40,7 @@ public class BinanceWebSocketTest {
             log.info("Connected to Binance WebSocket");
             
             // Subscribe message 전송
-            String subscribeMessage = binanceProtocol.createSubscribeMessage(pairs, messageFormat);
+            String subscribeMessage = binanceProtocol.createSubscribeMessage(pairs);
             log.info("Sending subscribe message: {}", subscribeMessage);
             
             return handler.sendMessage(subscribeMessage)
@@ -54,7 +53,6 @@ public class BinanceWebSocketTest {
         .doOnComplete(() -> log.info("Test completed"))
         .subscribe();
 
-        // 테스트가 너무 빨리 끝나지 않도록 잠시 대기
         try {
             Thread.sleep(3000);
         } catch (InterruptedException e) {

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -22,15 +21,6 @@ class BithumbProtocolImplTest {
     @Autowired
     private BithumbExchangeProtocol protocol;
     
-    private String subscribeFormat;
-    private String unsubscribeFormat;
-    
-    @BeforeEach
-    void setUp() {
-        subscribeFormat = "{\"type\":\"transaction\",\"symbols\":[\"%s\"]}";
-        unsubscribeFormat = "{\"type\":\"transaction\",\"symbols\":[\"%s\"]}";
-    }
-    
     @Test
     @DisplayName("빗썸 구독 메시지 포맷 테스트")
     void shouldCreateSubscribeMessage() {
@@ -41,7 +31,7 @@ class BithumbProtocolImplTest {
         );
         
         // when
-        String message = protocol.createSubscribeMessage(pairs, subscribeFormat);
+        String message = protocol.createSubscribeMessage(pairs);
         log.info("Bithumb subscribe message: {}", message);
         
         // then
@@ -60,7 +50,7 @@ class BithumbProtocolImplTest {
         );
         
         // when
-        String message = protocol.createUnsubscribeMessage(pairs, unsubscribeFormat);
+        String message = protocol.createUnsubscribeMessage(pairs);
         log.info("Bithumb unsubscribe message: {}", message);
         
         // then

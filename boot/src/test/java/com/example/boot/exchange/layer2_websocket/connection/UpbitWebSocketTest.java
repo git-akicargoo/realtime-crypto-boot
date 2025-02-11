@@ -32,7 +32,6 @@ public class UpbitWebSocketTest {
             new CurrencyPair("KRW", "BTC"),
             new CurrencyPair("KRW", "ETH")
         );
-        String messageFormat = "[{\"ticket\":\"test\"},{\"type\":\"trade\",\"codes\":[\"KRW-%s\"]}]";
 
         // When
         Flux<MessageHandler> connection = connectionFactory.createConnection(exchange, url);
@@ -41,7 +40,7 @@ public class UpbitWebSocketTest {
             log.info("Connected to Upbit WebSocket");
             
             // Subscribe message 전송 (바이너리로 전송)
-            String subscribeMessage = upbitProtocol.createSubscribeMessage(pairs, messageFormat);
+            String subscribeMessage = upbitProtocol.createSubscribeMessage(pairs);
             byte[] binaryMessage = subscribeMessage.getBytes();
             log.info("Sending subscribe message: {}", subscribeMessage);
             
