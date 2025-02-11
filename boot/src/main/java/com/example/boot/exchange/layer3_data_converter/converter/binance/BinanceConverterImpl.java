@@ -1,10 +1,11 @@
 package com.example.boot.exchange.layer3_data_converter.converter.binance;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.HashMap;
-import java.util.concurrent.Callable;
+import java.util.Objects;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import com.example.boot.exchange.layer1_core.model.CurrencyPair;
 import com.example.boot.exchange.layer1_core.model.ExchangeMessage;
@@ -12,39 +13,63 @@ import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeDat
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
 @Slf4j
-@Service
-@RequiredArgsConstructor
+@Component
 public class BinanceConverterImpl implements BinanceConverter {
     private final ObjectMapper objectMapper;
 
+    public BinanceConverterImpl(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     @Override
     public Mono<StandardExchangeData> convert(ExchangeMessage message) {
-        return Mono.fromCallable((Callable<StandardExchangeData>) () -> {
-            try {
-                JsonNode node = objectMapper.readTree(message.rawMessage());
-                
-                String symbol = node.get("s").asText(); // ex: "BTCUSDT"
-                String base = symbol.substring(0, 3);   // "BTC"
-                String quote = symbol.substring(3);     // "USDT"
-                
-                return StandardExchangeData.builder()
-                    .exchange(getExchangeName())
-                    .currencyPair(new CurrencyPair(quote, base))
-                    .price(new BigDecimal(node.get("p").asText()))
-                    .volume(new BigDecimal(node.get("q").asText()))
-                    .timestamp(message.timestamp())
-                    .metadata(new HashMap<>())
-                    .build();
-                    
-            } catch (Exception e) {
-                log.error("Failed to convert Binance message: {}", e.getMessage());
-                throw new RuntimeException("Message conversion failed", e);
+        return Mono.fromCallable(() -> {
+            JsonNode root = objectMapper.readTree(message.rawMessage());
+            
+            // 구독 응답 메시지 체크
+            if (root.has("result")) {
+                log.info("[컨버터-1] 구독 응답 수신: {}", message.rawMessage());
+                return null;
             }
+
+            // 실제 거래 데이터 처리
+            if (!root.has("e") || !"trade".equals(root.get("e").asText())) {
+                log.info("[컨버터-2] 무시된 메시지: {}", message.rawMessage());
+                return null;
+            }
+
+            log.info("[컨버터-3] 거래 데이터 수신: {}", message.rawMessage());
+
+            String symbol = root.get("s").asText();
+            String price = root.get("p").asText();
+            String quantity = root.get("q").asText();
+            long timestamp = root.get("T").asLong();
+
+            StandardExchangeData data = StandardExchangeData.builder()
+                .exchange(message.exchange())
+                .currencyPair(new CurrencyPair(symbol.substring(3), symbol.substring(0, 3)))
+                .price(new BigDecimal(price))
+                .volume(new BigDecimal(quantity))
+                .timestamp(Instant.ofEpochMilli(timestamp))
+                .metadata(new HashMap<>())
+                .build();
+
+            log.info("[컨버터-4] 변환 완료: exchange={}, pair={}, price={}, volume={}", 
+                data.getExchange(), 
+                data.getCurrencyPair(),
+                data.getPrice(), 
+                data.getVolume());
+
+            return data;
+        })
+        .filter(Objects::nonNull)
+        .onErrorResume(e -> {
+            log.error("[컨버터-5] 변환 실패: {}", e.getMessage());
+            return Mono.empty();
         });
     }
 

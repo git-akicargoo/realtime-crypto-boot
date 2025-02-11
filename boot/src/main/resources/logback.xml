@@ -22,9 +22,10 @@
     <!-- 테스트 관련 패키지는 DEBUG 레벨로 설정 -->
     <logger name="com.example.boot.exchange_layer.layer3_exchange_protocol" level="DEBUG"/>
 
-    <!-- WebSocket 관련 로그 레벨을 TRACE로 설정 -->
-    <logger name="com.example.boot.exchange.layer2_websocket" level="TRACE"/>
-    <logger name="org.springframework.web.reactive.socket" level="DEBUG"/>
+    <!-- WebSocket 관련 로그 레벨을 INFO로 변경 -->
+    <logger name="com.example.boot.exchange.layer2_websocket" level="INFO"/>
+    <logger name="org.springframework.web.reactive.socket" level="INFO"/>
+    <logger name="reactor.netty.http.client" level="INFO"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE" />
