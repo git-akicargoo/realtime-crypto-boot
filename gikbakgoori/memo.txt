@@ -2,65 +2,80 @@
 
 ## 레이어 구조
 
-### Layer 1 - Core
+### Layer 1 - Core [완료]
 /layer1_core/
 - 기본 모델 정의
 - 프로토콜 정의
 - 공통 유틸리티
 
 구현 내용:
-- CurrencyPair: 거래쌍 모델
-- ExchangeMessage: 기본 메시지 모델
-- BaseExchangeProtocol: 거래소 프로토콜 인터페이스
-- 거래소별 프로토콜 구현체 (Binance, Upbit, Bithumb)
+- [x] CurrencyPair: 거래쌍 모델
+- [x] ExchangeMessage: 기본 메시지 모델
+- [x] BaseExchangeProtocol: 거래소 프로토콜 인터페이스
+- [x] 거래소별 프로토콜 구현체 (Binance, Upbit, Bithumb)
 
-### Layer 2 - WebSocket
+### Layer 2 - WebSocket [완료]
 /layer2_websocket/
 - 거래소 웹소켓 연결 관리
 - 실시간 메시지 송수신
 
 구현 내용:
-- ConnectionFactory: 웹소켓 연결 생성
-- MessageHandler: 메시지 송수신 처리
-- WebSocketConfig: 웹소켓 설정
+- [x] ConnectionFactory: 웹소켓 연결 생성
+- [x] MessageHandler: 메시지 송수신 처리
+- [x] WebSocketConfig: 웹소켓 설정
+- [x] 거래소별 WebSocket 테스트 완료
 
-### Layer 3 - Data Converter
+### Layer 3 - Data Converter [진행중]
 /layer3_data_converter/
 - 거래소별 데이터 표준화
 - 메시지 변환 및 통합
 
 구현 내용:
-- StandardExchangeData: 표준화된 데이터 모델
-- DataConverterService: 데이터 변환 서비스 인터페이스
-- ExchangeDataConverter: 거래소별 변환 로직
+- [x] StandardExchangeData: 표준화된 데이터 모델
+- [x] ExchangeDataConverter: 데이터 변환 인터페이스
+- [x] 거래소별 변환 로직 구현
+  - [x] BinanceConverter: 바이낸스 데이터 변환
+  - [x] UpbitConverter: 업비트 데이터 변환
+  - [x] BithumbConverter: 빗썸 데이터 변환
+- [x] 거래소별 변환 통합 테스트
+- [ ] DataConverterService: 통합 변환 서비스 구현 (예정)
 
-### Layer 4 - Service
+### Layer 4 - Service [예정]
 /layer4_service/
 - 비즈니스 로직
 - 용도별 데이터 가공
 
-구현 내용:
+계획:
 - ExchangeDataProcessor: 공통 데이터 처리
+  - 실시간 데이터 필터링
+  - 데이터 집계
+  - 이상 감지
 - 용도별 서비스:
-  - KafkaExchangeService
-  - WebSocketExchangeService
-  - RedisExchangeService
+  - KafkaExchangeService: 메시지 큐 연동
+  - WebSocketExchangeService: 실시간 클라이언트 전송
+  - RedisExchangeService: 캐싱 및 세션
 
-### Infrastructure
+### Infrastructure [예정]
 /infrastructure/
 
 1. 필수 인프라 (항상 활성화)
    - MySQL
-     - 기본 데이터 저장소
-     - 설정 정보 관리
+     - 거래소 설정 관리
+     - 구독 정보 관리
+     - 통계 데이터 저장
    - Web
-     - 클라이언트 웹소켓 연동
-     - REST API 제공
+     - 클라이언트 웹소켓 서버
+     - 관리자 REST API
+     - 모니터링 엔드포인트
 
 2. 선택적 인프라 (조건부 활성화)
-   - Kafka: 메시지 브로커
-   - Redis: 캐싱 및 세션 관리
-
+   - Kafka
+     - 실시간 데이터 스트림 처리
+     - 데이터 파이프라인 구성
+   - Redis
+     - 실시간 데이터 캐싱
+     - 세션 관리
+     - 임시 데이터 저장
 
 ## 구현 순서 및 세부 계획
 
@@ -75,18 +90,31 @@
    - [x] ConnectionFactory 인터페이스 및 구현
    - [x] MessageHandler 인터페이스 및 구현
 
-3. Layer 3 Data Converter 구현
-   - [ ] StandardExchangeData 모델 정의
-   - [ ] DataConverterService 인터페이스 정의
-   - [ ] 거래소별 데이터 변환 로직 구현
-   - [ ] 테스트 코드 작성
+3. Layer 3 Data Converter 구현 [진행중]
+   - [x] StandardExchangeData 모델 정의
+   - [x] ExchangeDataConverter 인터페이스 정의
+   - [x] 거래소별 데이터 변환 로직 구현
+     - [x] BinanceConverter 구현
+     - [x] UpbitConverter 구현
+     - [x] BithumbConverter 구현
+   - [x] 거래소별 통합 테스트 작성 및 검증
+   - [ ] DataConverterService 구현
+     - [ ] 거래소별 컨버터 통합 관리
+     - [ ] 에러 처리 및 복구 전략
+     - [ ] 성능 최적화
 
-4. Layer 4 Service 구현
+4. Layer 4 Service 구현 [예정]
    - [ ] ExchangeDataProcessor 구현
+     - [ ] 실시간 데이터 필터링
+     - [ ] 데이터 집계 로직
+     - [ ] 이상 거래 감지
    - [ ] 인프라별 서비스 구현
+     - [ ] KafkaExchangeService
+     - [ ] WebSocketExchangeService
+     - [ ] RedisExchangeService
    - [ ] 테스트 코드 작성
 
-5. Infrastructure 구현
+5. Infrastructure 구현 [예정]
    A. 필수 인프라
       - [ ] MySQL 연동
         - [ ] 엔티티 설계
@@ -150,7 +178,53 @@
 
 
 ## 다음 구현 단계
-Layer 3 Data Converter 구현부터 시작
-- StandardExchangeData 모델 정의
-- DataConverterService 인터페이스 설계
-- 거래소별 변환 로직 구현
+
+1. Layer 3 마무리 - DataConverterService 구현
+   - [ ] 거래소별 컨버터 통합 관리 서비스
+     - 컨버터 자동 등록 및 관리 (Spring의 @Component 활용)
+     - 거래소별 컨버터 동적 라우팅
+     - 에러 처리 및 복구 전략
+   - [ ] 변환된 데이터 검증 로직
+     - 필수 필드 검증
+     - 데이터 형식 검증
+     - 비즈니스 룰 검증
+   - [ ] 성능 최적화
+     - 비동기 처리 최적화
+     - 메모리 사용량 최적화
+     - 로깅 전략 수립
+
+2. Layer 4 구현
+   - [ ] ExchangeDataProcessor
+     - 데이터 필터링
+     - 집계 로직
+     - 이상 감지
+   - [ ] 인프라별 서비스 구현
+     - 각 인프라 특성에 맞는 처리
+
+3. Infrastructure 구현
+   - [ ] MySQL 연동
+   - [ ] Web 서버 구현
+   - [ ] Kafka 연동 (선택)
+   - [ ] Redis 연동 (선택)
+
+## 주요 고려사항
+
+1. 성능 최적화
+   - 메모리 사용량 모니터링
+   - GC 튜닝
+   - 스레드 풀 관리
+
+2. 안정성
+   - 재연결 메커니즘
+   - 에러 복구 전략
+   - 서킷 브레이커 패턴
+
+3. 모니터링
+   - 메트릭 수집
+   - 로그 추적
+   - 알림 설정
+
+4. 테스트
+   - 단위 테스트 보강
+   - 통합 테스트 시나리오
+   - 성능 테스트
