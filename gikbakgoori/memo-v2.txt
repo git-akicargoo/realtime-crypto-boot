@@ -18,19 +18,25 @@
    - 메시지 변환 및 통합
    - 통합 테스트 완료
 
-4. Message Distributor Layer [예정]
-   - 기본 WebSocket 구현
-     - /ws/exchange 엔드포인트
-     - 클라이언트 세션 관리
-     - 실시간 데이터 브로드캐스팅
+4. Message Distributor Layer [진행 예정]
    
-   - 선택적 인프라 지원 설계
-     - 인프라 독립적인 구조
-     - 조건부 엔드포인트 제공
-       - WebSocket 전용: /ws/exchange (기본)
-       - Kafka 활성화: /ws/kafka (선택)
-       - Redis 활성화: /ws/redis (선택)
-     - 인프라 상태 확인 API (/api/ws/infra-health)
+   Phase 1: 기본 WebSocket 구현 [첫 번째 목표]
+   - 기본 WebSocket 엔드포인트 (/ws/exchange)
+   - 클라이언트 세션 관리
+   - 실시간 데이터 브로드캐스팅
+   - 프론트엔드 연동 테스트
+
+   Phase 2: 헬스체크 시스템 구현
+   - 인프라 상태 확인 API (/api/ws/infra-health)
+   - 카프카/레디스 활성화 상태 확인
+   - 연결 상태 모니터링
+
+   Phase 3: 인프라 확장 지원
+   - 조건부 엔드포인트 제공
+     - Kafka 활성화: /ws/kafka
+     - Redis 활성화: /ws/redis
+   - 인프라별 서비스 구현
+   - 장애 시 자동 폴백
 
 ### 분산 환경 구성
 
@@ -114,27 +120,21 @@
 
 ### 다음 구현 계획
 
-1. Message Distributor - 기본 구현
-   - [ ] WebSocket 기반 구현
-     - [ ] MessageDistributor 인터페이스 정의
-     - [ ] WebSocketMessageDistributor 구현
-     - [ ] 클라이언트 세션 관리
-     - [ ] 메시지 브로드캐스팅
-   
-   - [ ] 인프라 독립적 설계
-     - [ ] 조건부 설정 구조
-     - [ ] 인프라 상태 확인
-     - [ ] 엔드포인트 분기 처리
+1. Phase 1: 기본 WebSocket [시작]
+   - [ ] MessageDistributor 인터페이스 정의
+   - [ ] WebSocketMessageDistributor 구현
+   - [ ] 클라이언트 세션 관리
+   - [ ] 프론트엔드 연동 테스트
 
-   - [ ] 테스트
-     - [ ] 기본 WebSocket 테스트
-     - [ ] 세션 관리 테스트
-     - [ ] 메시지 전송 테스트
+2. Phase 2: 헬스체크 시스템
+   - [ ] 인프라 상태 확인 API
+   - [ ] 상태 모니터링 서비스
+   - [ ] 프론트엔드 헬스체크 연동
 
-2. 선택적 인프라 지원 (추후 구현)
-   - Kafka 지원
-   - Redis 지원
-   - 복합 인프라 구성
+3. Phase 3: 인프라 확장
+   - [ ] Kafka 지원 추가
+   - [ ] Redis 지원 추가
+   - [ ] 자동 폴백 처리
 
 ## 구현 전략
 
