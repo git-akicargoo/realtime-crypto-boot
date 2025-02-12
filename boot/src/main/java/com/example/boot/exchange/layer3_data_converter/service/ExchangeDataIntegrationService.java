@@ -11,9 +11,13 @@ import reactor.core.publisher.Mono;
 
 public interface ExchangeDataIntegrationService {
     /**
+     * 설정 파일 기반으로 모든 거래소 데이터 자동 구독
+     */
+    Flux<StandardExchangeData> subscribe();
+    
+    /**
      * 지정된 거래소와 화폐쌍에 대한 실시간 데이터 구독
      * @param exchangePairs 거래소별 구독할 화폐쌍 목록 (Map<거래소, List<화폐쌍>>)
-     * @return 표준화된 거래소 데이터 스트림
      */
     Flux<StandardExchangeData> subscribe(Map<String, List<CurrencyPair>> exchangePairs);
     

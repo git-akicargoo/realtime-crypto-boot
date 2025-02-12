@@ -53,4 +53,5 @@ public class ExchangeConfig {
         private long reconnectDelay = 1000L;
         private long connectionTimeout = 30000L;
     }
+
 } 

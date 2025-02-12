@@ -21,20 +21,20 @@ exchange:
     bithumb: wss://pubwss.bithumb.com/pub/ws
   common:
     supported-symbols:
-      - BTC
-      - ETH
-      - XRP
+      # - BTC
+      # - ETH
+      # - XRP
       - DOGE
   exchanges:
     binance:
       supported-currencies:
-        - USDT
-        - BTC
+        # - USDT
+        # - BTC
     upbit:
       supported-currencies:
-        - KRW
-        - BTC
-        - USDT
+        # - KRW
+        # - BTC
+        # - USDT
     bithumb:
       supported-currencies:
         - KRW

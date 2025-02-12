@@ -20,3 +20,4 @@
 
 ./gradlew test --tests "com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationServiceImplTest" --info
 
+./gradlew test --tests "com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationServiceIntegrationTest" --info

@@ -1,6 +1,7 @@
 package com.example.boot.exchange.layer3_data_converter.service;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,48 +54,138 @@ public class ExchangeDataIntegrationServiceImpl implements ExchangeDataIntegrati
     }
 
     @Override
+    public Flux<StandardExchangeData> subscribe() {
+        Map<String, List<CurrencyPair>> exchangePairs = createExchangePairsFromConfig();
+        
+        // 구독할 페어가 없는 거래소는 제외
+        exchangePairs = exchangePairs.entrySet().stream()
+            .filter(entry -> !entry.getValue().isEmpty())
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                Map.Entry::getValue
+            ));
+        
+        if (exchangePairs.isEmpty()) {
+            return Flux.error(new IllegalStateException("No valid exchange pairs configured"));
+        }
+        
+        log.info("Subscribing to exchanges: {}", exchangePairs);
+        return subscribe(exchangePairs)
+            .doOnError(error -> log.error("Error in subscription: ", error))
+            .retry(config.getConnection().getMaxRetryAttempts())
+            .onErrorResume(e -> {
+                log.error("Failed to subscribe after retries: ", e);
+                return Flux.empty();
+            });
+    }
+
+    private Map<String, List<CurrencyPair>> createExchangePairsFromConfig() {
+        Map<String, List<CurrencyPair>> pairs = new HashMap<>();
+        
+        if (config.getExchanges().getBinance() != null) {
+            var binancePairs = createPairsFromConfig(
+                config.getCommon().getSupportedSymbols(), 
+                config.getExchanges().getBinance().getSupportedCurrencies()
+            );
+            pairs.put("binance", binancePairs);
+            log.debug("Created pairs for Binance: {}", binancePairs);
+        }
+        
+        if (config.getExchanges().getUpbit() != null) {
+            var upbitPairs = createPairsFromConfig(
+                config.getCommon().getSupportedSymbols(), 
+                config.getExchanges().getUpbit().getSupportedCurrencies()
+            );
+            pairs.put("upbit", upbitPairs);
+            log.debug("Created pairs for Upbit: {}", upbitPairs);
+        }
+        
+        if (config.getExchanges().getBithumb() != null) {
+            var bithumbPairs = createPairsFromConfig(
+                config.getCommon().getSupportedSymbols(), 
+                config.getExchanges().getBithumb().getSupportedCurrencies()
+            );
+            pairs.put("bithumb", bithumbPairs);
+            log.debug("Created pairs for Bithumb: {}", bithumbPairs);
+        }
+        
+        log.info("Created exchange pairs from config: {}", pairs);
+        return pairs;
+    }
+
+    private List<CurrencyPair> createPairsFromConfig(List<String> symbols, List<String> currencies) {
+        return symbols.stream()
+            .flatMap(symbol -> currencies.stream()
+                .map(currency -> new CurrencyPair(currency, symbol)))
+            .collect(Collectors.toList());
+    }
+
+    @Override
     public Flux<StandardExchangeData> subscribe(Map<String, List<CurrencyPair>> exchangePairs) {
         return Flux.fromIterable(exchangePairs.entrySet())
             .flatMap(entry -> subscribeToExchange(entry.getKey(), entry.getValue()));
     }
 
     private Flux<StandardExchangeData> subscribeToExchange(String exchange, List<CurrencyPair> pairs) {
+        if (pairs.isEmpty()) {
+            log.warn("No pairs configured for exchange: {}", exchange);
+            return Flux.empty();
+        }
+
         BaseExchangeProtocol protocol = protocols.get(exchange);
         ExchangeDataConverter converter = converters.get(exchange);
         
         if (protocol == null || converter == null) {
-            return Flux.error(new IllegalArgumentException("Unsupported exchange: " + exchange));
+            log.error("Missing protocol or converter for exchange: {}", exchange);
+            return Flux.empty();
         }
 
-        // config에서 직접 URL 가져오기
-        String wsUrl = switch (exchange.toLowerCase()) {
-            case "binance" -> config.getWebsocket().getBinance();
-            case "upbit" -> config.getWebsocket().getUpbit();
-            case "bithumb" -> config.getWebsocket().getBithumb();
-            default -> throw new IllegalArgumentException("Unsupported exchange: " + exchange);
-        };
+        String wsUrl = getWebSocketUrl(exchange);
+        if (wsUrl == null) {
+            log.error("Missing WebSocket URL for exchange: {}", exchange);
+            return Flux.empty();
+        }
 
         return connectionFactory.createConnection(exchange, wsUrl)
             .flatMap(handler -> {
                 activeHandlers.put(exchange, handler);
                 
-                // 업비트만 바이너리 메시지 사용
-                Flux<Void> subscription = exchange.equalsIgnoreCase("upbit")
-                    ? handler.sendBinaryMessage(protocol.createSubscribeMessage(pairs).getBytes())
-                    : handler.sendMessage(protocol.createSubscribeMessage(pairs));
-
-                return subscription.thenMany(handler.receiveMessage())
+                return sendSubscribeMessage(exchange, handler, protocol, pairs)
+                    .thenMany(handler.receiveMessage())
                     .map(raw -> new ExchangeMessage(
-                        exchange,
-                        raw,
-                        Instant.now(),
+                        exchange, raw, Instant.now(), 
                         ExchangeMessage.MessageType.TRADE
                     ))
-                    .flatMap(converter::convert)
+                    .flatMap(msg -> converter.convert(msg)
+                        .doOnError(e -> log.error("Error converting message from {}: {}", 
+                            exchange, e.getMessage()))
+                        .onErrorResume(e -> Mono.empty())
+                    )
                     .doOnNext(data -> log.debug("Converted data from {}: {}", exchange, data))
                     .doOnError(error -> log.error("Error processing message from {}: {}", 
                         exchange, error.getMessage()));
             });
+    }
+
+    private Flux<Void> sendSubscribeMessage(
+        String exchange, 
+        MessageHandler handler, 
+        BaseExchangeProtocol protocol,
+        List<CurrencyPair> pairs
+    ) {
+        String message = protocol.createSubscribeMessage(pairs);
+        return exchange.equalsIgnoreCase("upbit")
+            ? handler.sendBinaryMessage(message.getBytes())
+            : handler.sendMessage(message);
+    }
+
+    private String getWebSocketUrl(String exchange) {
+        return switch (exchange.toLowerCase()) {
+            case "binance" -> config.getWebsocket().getBinance();
+            case "upbit" -> config.getWebsocket().getUpbit();
+            case "bithumb" -> config.getWebsocket().getBithumb();
+            default -> null;
+        };
     }
 
     @Override
