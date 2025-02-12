@@ -1,0 +1,334 @@
+# Exchange Service 아키텍처 및 구현 계획 V2
+
+## 전체 아키텍처
+
+### 핵심 컴포넌트
+
+1. Core Layer [완료]
+   - 기본 모델 정의
+   - 프로토콜 정의
+   - 공통 유틸리티
+
+2. WebSocket Layer [완료]
+   - 거래소 웹소켓 연결 관리
+   - 실시간 메시지 송수신
+
+3. Data Converter Layer [진행중]
+   - 거래소별 데이터 표준화
+   - 메시지 변환 및 통합
+
+4. Message Distributor Layer [예정]
+   - 인프라 상태 모니터링
+   - 메시지 분배 및 전송
+   - 장애 복구 처리
+
+### 분산 환경 구성
+
+1. 리더 선출 메커니즘
+   - Zookeeper 기반 리더 선출
+   - 리더-팔로워 구조 관리
+   - 장애 시 자동 리더 재선출
+
+2. 역할 분담
+   - 리더 노드
+     - 거래소 WebSocket 연결 관리 (IP당 연결 제한 준수)
+     - 실시간 데이터 수집
+     - Kafka 메시지 발행
+   - 팔로워 노드
+     - Kafka 메시지 구독
+     - 전체 데이터 스트림 제공
+     - WebSocket 클라이언트 연결 관리
+
+3. 클라이언트 처리 전략
+   - 백엔드
+     - 전체 데이터 스트림 제공
+     - 개별 구독 요청 처리 없음
+     - WebSocket 연결 관리
+   - 프론트엔드
+     - 전체 데이터 스트림 구독
+     - 클라이언트 사이드 필터링
+     - 사용자 설정에 따른 데이터 표시
+
+4. 오토스케일링 대응
+   - 백엔드
+     - 리더 노드만 거래소 연결
+     - 팔로워 노드는 Kafka 구독
+     - 부하 분산 자동화
+   - 프론트엔드
+     - 스케일아웃 시에도 동일 로직
+     - 클라이언트 사이드 필터링 유지
+     - 백엔드 연결 부하 최소화
+
+### 인프라 구조
+
+1. 필수 인프라
+   - MySQL: 설정 및 메타데이터 관리
+   - Web Server: REST API 및 WebSocket 제공
+   - Zookeeper: 리더 선출 및 분산 조정
+
+2. 선택적 인프라
+   - Kafka: 실시간 메시지 스트리밍
+   - Redis: 실시간 데이터 캐싱
+
+## 구현 현황
+
+### 완료된 구현
+1. Layer 1 - Core
+   - [x] CurrencyPair: 거래쌍 모델
+   - [x] ExchangeMessage: 기본 메시지 모델
+   - [x] BaseExchangeProtocol: 거래소 프로토콜 인터페이스
+   - [x] 거래소별 프로토콜 구현체
+
+2. Layer 2 - WebSocket
+   - [x] ConnectionFactory: 웹소켓 연결 생성
+   - [x] MessageHandler: 메시지 송수신 처리
+   - [x] WebSocketConfig: 웹소켓 설정
+
+3. Layer 3 - Data Converter
+   - [x] StandardExchangeData: 표준화된 데이터 모델
+   - [x] ExchangeDataConverter: 데이터 변환 인터페이스
+   - [x] 거래소별 변환 로직 구현
+     - [x] BinanceConverter
+     - [x] UpbitConverter
+     - [x] BithumbConverter
+   - [x] 거래소별 통합 테스트
+
+### 진행중인 구현
+1. Layer 3 - Data Converter 마무리
+   - [ ] DataConverterService 구현
+     - [ ] 거래소별 컨버터 통합 관리
+     - [ ] 변환된 데이터 검증
+     - [ ] 에러 처리 및 복구
+     - [ ] 성능 최적화
+     - [ ] 통합 테스트
+
+### 다음 구현 계획
+1. Message Distributor - 기본 구현 (DataConverterService 완료 후)
+   - [ ] 기본 WebSocket 기반 메시지 분배
+   - [ ] 클라이언트 연결 관리
+   - [ ] 상태 모니터링 기능
+   - [ ] 에러 처리 및 재연결
+   - [ ] 프론트엔드 연동 테스트
+
+2. Kafka 확장
+   - [ ] Kafka 상태 모니터링
+   - [ ] Producer 구현
+   - [ ] 리더-팔로워 구조
+   - [ ] WebSocket 폴백 처리
+   - [ ] 분산 처리 테스트
+
+3. Redis 확장
+   - [ ] Redis 상태 모니터링
+   - [ ] 캐시 서비스 구현
+   - [ ] DB 연동 최적화
+   - [ ] 세션 관리
+   - [ ] 성능 테스트
+
+## 데이터 흐름
+
+1. 단일 노드 환경
+   [거래소] → [WebSocket Layer] → [Data Converter Layer] → [Message Distributor] → [Clients]
+
+2. 분산 환경
+   [거래소] → [WebSocket Layer] → [Data Converter Layer] → [Message Distributor]
+                                                                    ↓
+                                                          [Infrastructure Layer]
+                                                          - Kafka (if enabled)
+                                                          - Redis (if enabled)
+                                                          - WebSocket (default)
+                                                                    ↓
+                                                            [Consumers]
+                                                          - Client Apps
+                                                          - Other Services
+                                                          - Follower Nodes
+
+## 주요 설계 원칙
+
+1. 인프라 독립성
+   - 필수 인프라만으로 핵심 기능 동작
+   - 선택적 인프라는 조건부 활성화
+   - 장애 시 자동 대체 처리
+
+2. 확장성
+   - 오토스케일링 지원
+   - 새로운 거래소 추가 용이
+   - 새로운 인프라 추가 용이
+
+3. 고가용성
+   - 리더-팔로워 구조로 안정성 확보
+   - 자동 장애 복구
+   - 무중단 서비스 제공
+
+4. 유지보수성
+   - 명확한 레이어 구조
+   - 책임 분리
+   - 상세한 로깅
+
+## 다음 주 목표
+
+1. DataConverterService 완성
+   - 거래소별 컨버터 통합
+   - 데이터 검증
+   - 단위 테스트
+
+2. MessageDistributorService 기본 구조
+   - 인프라 모니터링
+   - 메시지 분배
+   - 상태 관리
+
+## 클라이언트 구현 전략
+
+1. 프론트엔드 데이터 처리 방식
+   - 백엔드로부터 전체 데이터 스트림 수신
+   - 클라이언트 사이드 필터링 적용
+     - 사용자가 선택한 거래소
+     - 선택한 화폐쌍
+     - 관심 있는 데이터 타입
+   - 스케일링과 무관하게 동일한 처리 방식 유지
+     - 개별 구독 요청 없음
+     - 항상 전체 스트림 구독 후 필터링
+
+2. 프론트엔드 구현 이점
+   - 백엔드 부하 감소
+   - 실시간 필터 변경 가능
+   - 네트워크 연결 최소화
+   - 확장성 향상
+
+3. 구현 예시
+   ```typescript
+   class ExchangeDataManager {
+       private dataStream: WebSocket;
+       private userPreferences: ExchangePreferences;
+       
+       constructor() {
+           // 전체 데이터 스트림 구독
+           this.dataStream = new WebSocket('ws://backend/stream');
+           
+           // 클라이언트 사이드 필터링
+           this.dataStream.onmessage = (event) => {
+               const data = JSON.parse(event.data);
+               if (this.shouldDisplayData(data)) {
+                   this.updateUI(data);
+               }
+           };
+       }
+       
+       // 필터링 설정 업데이트 (거래소, 코인 선택 등)
+       public updatePreferences(prefs: ExchangePreferences) {
+           this.userPreferences = prefs;
+           // UI 업데이트만 수행, 서버 연결은 유지
+       }
+   }
+   ``` 
+
+## 인프라 통합 레이어 설계
+
+1. Layer 4 - Infrastructure Integration Layer
+   - 인프라 연동 추상화
+   - 설정에 따른 조건부 활성화
+   - 폴백(fallback) 처리
+
+   a. 구성 요소
+   - InfrastructureService (인터페이스)
+     - KafkaService
+     - RedisService
+     - WebSocketService (기본)
+   
+   b. 주요 기능
+   - 메시지 발행/구독
+   - 데이터 캐싱
+   - 상태 모니터링
+   
+   c. 구현 예시
+   ```java
+   public interface InfrastructureService {
+       Flux<StandardExchangeData> publishData(StandardExchangeData data);
+       Flux<StandardExchangeData> subscribeToData();
+       Mono<Boolean> isHealthy();
+   }
+   ```
+
+2. 애플리케이션 기동 전략
+
+   a. 부트스트랩 프로세스
+   - ApplicationRunner 구현
+   - 설정 기반 서비스 초기화
+   - 리더/팔로워 역할 결정
+   
+   b. 구현 위치
+   - com.example.boot.exchange.bootstrap 패키지
+   - ExchangeServiceBootstrap 클래스
+   
+   c. 구현 예시
+   ```java
+   @Component
+   @Order(1)
+   public class ExchangeServiceBootstrap implements ApplicationRunner {
+       private final ExchangeDataIntegrationService integrationService;
+       private final LeaderElectionService leaderElection;
+       private final InfrastructureService infraService;
+       
+       @Override
+       public void run(ApplicationArguments args) {
+           if (leaderElection.isLeader()) {
+               startLeaderServices();
+           } else {
+               startFollowerServices();
+           }
+       }
+       
+       private void startLeaderServices() {
+           // 거래소 연결 및 데이터 수집
+           integrationService.subscribe(...)
+               .flatMap(infraService::publishData)
+               .subscribe();
+       }
+       
+       private void startFollowerServices() {
+           // 인프라 서비스 구독
+           infraService.subscribeToData()
+               .subscribe();
+       }
+   }
+   ```
+
+3. 인프라 설정 및 폴백 전략
+   
+   a. 설정 우선순위
+   1. Kafka + Redis (완전 분산)
+   2. Kafka only (메시지 큐)
+   3. Redis only (캐싱)
+   4. WebSocket only (기본)
+
+   b. 자동 폴백 처리
+   ```java
+   @Configuration
+   public class InfrastructureConfig {
+       @Bean
+       public InfrastructureService infrastructureService(
+           @Value("${spring.kafka.enabled}") boolean kafkaEnabled,
+           @Value("${spring.redis.enabled}") boolean redisEnabled
+       ) {
+           if (kafkaEnabled && redisEnabled) {
+               return new FullInfrastructureService(...);
+           } else if (kafkaEnabled) {
+               return new KafkaInfrastructureService(...);
+           } else if (redisEnabled) {
+               return new RedisInfrastructureService(...);
+           }
+           return new WebSocketInfrastructureService(...);
+       }
+   }
+   ```
+
+4. 모니터링 및 관리
+   - 인프라 상태 모니터링
+   - 자동 복구 전략
+   - 메트릭 수집
+
+이러한 구조를 통해:
+- 인프라 독립성 확보
+- 설정 기반 유연한 구성
+- 안정적인 서비스 운영
+- 확장 가능한 아키텍처
+를 달성할 수 있습니다. 
