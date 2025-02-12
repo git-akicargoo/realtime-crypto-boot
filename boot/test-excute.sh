@@ -6,6 +6,8 @@
 
 ./gradlew test --tests "com.example.boot.exchange.layer1_core.protocol.upbit.UpbitProtocolImplTest" --info
 
+./gradlew test --tests "com.example.boot.exchange.layer2_websocket.connection.BinanceMarketTest" --info
+
 ./gradlew test --tests "com.example.boot.exchange.layer2_websocket.connection.BinanceWebSocketTest" --info
 
 ./gradlew test --tests "com.example.boot.exchange.layer2_websocket.connection.BithumbWebSocketTest" --info

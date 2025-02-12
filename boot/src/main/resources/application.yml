@@ -21,9 +21,9 @@ exchange:
     bithumb: wss://pubwss.bithumb.com/pub/ws
   common:
     supported-symbols:
-      # - BTC
-      # - ETH
-      # - XRP
+      - BTC
+      - ETH
+      - XRP
       - DOGE
   exchanges:
     binance:
