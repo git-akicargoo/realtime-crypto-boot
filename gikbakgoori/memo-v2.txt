@@ -13,14 +13,24 @@
    - 거래소 웹소켓 연결 관리
    - 실시간 메시지 송수신
 
-3. Data Converter Layer [진행중]
+3. Data Converter Layer [완료]
    - 거래소별 데이터 표준화
    - 메시지 변환 및 통합
+   - 통합 테스트 완료
 
 4. Message Distributor Layer [예정]
-   - 인프라 상태 모니터링
-   - 메시지 분배 및 전송
-   - 장애 복구 처리
+   - 기본 WebSocket 구현
+     - /ws/exchange 엔드포인트
+     - 클라이언트 세션 관리
+     - 실시간 데이터 브로드캐스팅
+   
+   - 선택적 인프라 지원 설계
+     - 인프라 독립적인 구조
+     - 조건부 엔드포인트 제공
+       - WebSocket 전용: /ws/exchange (기본)
+       - Kafka 활성화: /ws/kafka (선택)
+       - Redis 활성화: /ws/redis (선택)
+     - 인프라 상태 확인 API (/api/ws/infra-health)
 
 ### 분산 환경 구성
 
@@ -91,38 +101,64 @@
      - [x] BinanceConverter
      - [x] UpbitConverter
      - [x] BithumbConverter
-   - [x] 거래소별 통합 테스트
-
-### 진행중인 구현
-1. Layer 3 - Data Converter 마무리
-   - [ ] DataConverterService 구현
-     - [ ] 거래소별 컨버터 통합 관리
-     - [ ] 변환된 데이터 검증
-     - [ ] 에러 처리 및 복구
-     - [ ] 성능 최적화
-     - [ ] 통합 테스트
+   - [x] DataConverterService 구현
+     - [x] 거래소별 컨버터 통합 관리
+     - [x] 변환된 데이터 검증
+     - [x] 에러 처리 및 복구
+     - [x] 성능 최적화
+   - [x] 통합 테스트 구현
+     - [x] 여러 거래소 동시 구독 테스트
+     - [x] 구독 해지 테스트
+     - [x] 거래소별 개별 테스트
+     - [x] 테스트 결과 자동 리포팅
 
 ### 다음 구현 계획
-1. Message Distributor - 기본 구현 (DataConverterService 완료 후)
-   - [ ] 기본 WebSocket 기반 메시지 분배
-   - [ ] 클라이언트 연결 관리
-   - [ ] 상태 모니터링 기능
-   - [ ] 에러 처리 및 재연결
-   - [ ] 프론트엔드 연동 테스트
 
-2. Kafka 확장
-   - [ ] Kafka 상태 모니터링
-   - [ ] Producer 구현
-   - [ ] 리더-팔로워 구조
-   - [ ] WebSocket 폴백 처리
-   - [ ] 분산 처리 테스트
+1. Message Distributor - 기본 구현
+   - [ ] WebSocket 기반 구현
+     - [ ] MessageDistributor 인터페이스 정의
+     - [ ] WebSocketMessageDistributor 구현
+     - [ ] 클라이언트 세션 관리
+     - [ ] 메시지 브로드캐스팅
+   
+   - [ ] 인프라 독립적 설계
+     - [ ] 조건부 설정 구조
+     - [ ] 인프라 상태 확인
+     - [ ] 엔드포인트 분기 처리
 
-3. Redis 확장
-   - [ ] Redis 상태 모니터링
-   - [ ] 캐시 서비스 구현
-   - [ ] DB 연동 최적화
-   - [ ] 세션 관리
-   - [ ] 성능 테스트
+   - [ ] 테스트
+     - [ ] 기본 WebSocket 테스트
+     - [ ] 세션 관리 테스트
+     - [ ] 메시지 전송 테스트
+
+2. 선택적 인프라 지원 (추후 구현)
+   - Kafka 지원
+   - Redis 지원
+   - 복합 인프라 구성
+
+## 구현 전략
+
+1. 기본 원칙
+   - WebSocket 기반 구현을 기본으로 함
+   - 추가 인프라는 선택적으로 적용 가능하도록 설계
+   - 인프라 의존성 최소화
+
+2. 확장성
+   - 새로운 인프라 추가 용이
+   - 기존 기능 영향 최소화
+   - 설정 기반 활성화/비활성화
+
+3. 클라이언트 연동
+   - 상태 확인 API 제공
+   - 적절한 엔드포인트 자동 선택
+   - 연결 실패 시 폴백 처리
+
+## 다음 주 목표
+
+1. Message Distributor 기본 구현
+   - WebSocket 기반 구현 완료
+   - 테스트 코드 작성
+   - 클라이언트 연동 테스트
 
 ## 데이터 흐름
 
@@ -166,60 +202,44 @@
 
 ## 다음 주 목표
 
-1. DataConverterService 완성
-   - 거래소별 컨버터 통합
-   - 데이터 검증
-   - 단위 테스트
-
-2. MessageDistributorService 기본 구조
-   - 인프라 모니터링
-   - 메시지 분배
-   - 상태 관리
+1. Message Distributor 기본 구현
+   - WebSocket 기반 구현 완료
+   - 테스트 코드 작성
+   - 클라이언트 연동 테스트
 
 ## 클라이언트 구현 전략
 
 1. 프론트엔드 데이터 처리 방식
-   - 백엔드로부터 전체 데이터 스트림 수신
+   - 백엔드 엔드포인트 정보 조회
+   - WebSocket 연결 및 재연결 처리
    - 클라이언트 사이드 필터링 적용
      - 사용자가 선택한 거래소
      - 선택한 화폐쌍
      - 관심 있는 데이터 타입
-   - 스케일링과 무관하게 동일한 처리 방식 유지
-     - 개별 구독 요청 없음
-     - 항상 전체 스트림 구독 후 필터링
 
 2. 프론트엔드 구현 이점
-   - 백엔드 부하 감소
+   - 인프라 구성 독립적
+   - 자동 폴백 처리
    - 실시간 필터 변경 가능
    - 네트워크 연결 최소화
-   - 확장성 향상
 
 3. 구현 예시
    ```typescript
-   class ExchangeDataManager {
-       private dataStream: WebSocket;
-       private userPreferences: ExchangePreferences;
+   class ExchangeWebSocket {
+       private ws: WebSocket;
        
-       constructor() {
-           // 전체 데이터 스트림 구독
-           this.dataStream = new WebSocket('ws://backend/stream');
-           
-           // 클라이언트 사이드 필터링
-           this.dataStream.onmessage = (event) => {
-               const data = JSON.parse(event.data);
-               if (this.shouldDisplayData(data)) {
-                   this.updateUI(data);
-               }
-           };
-       }
-       
-       // 필터링 설정 업데이트 (거래소, 코인 선택 등)
-       public updatePreferences(prefs: ExchangePreferences) {
-           this.userPreferences = prefs;
-           // UI 업데이트만 수행, 서버 연결은 유지
+       async connect() {
+           try {
+               // 엔드포인트 정보 조회
+               const info = await fetch('/ws/info').then(r => r.json());
+               this.ws = new WebSocket(info.endpoint);
+           } catch (error) {
+               // 폴백 엔드포인트로 재시도
+               this.ws = new WebSocket('ws://host/ws/exchange');
+           }
        }
    }
-   ``` 
+   ```
 
 ## 인프라 통합 레이어 설계
 
