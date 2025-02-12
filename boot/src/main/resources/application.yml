@@ -28,18 +28,19 @@ exchange:
   exchanges:
     binance:
       supported-currencies:
-        # - USDT
-        # - BTC
+        - USDT
+        - BTC
     upbit:
-      supported-currencies:
-        # - KRW
-        # - BTC
-        # - USDT
-    bithumb:
       supported-currencies:
         - KRW
         - BTC
         - USDT
+    bithumb: 
+      supported-currencies:
+        # 빗썸은 KRW 만 지원한다네;;;
+        - KRW    
+        # - BTC
+        # - USDT
 
 app:
   websocket:

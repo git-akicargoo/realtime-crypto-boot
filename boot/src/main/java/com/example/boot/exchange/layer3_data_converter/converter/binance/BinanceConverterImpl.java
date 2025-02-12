@@ -49,9 +49,24 @@ public class BinanceConverterImpl implements BinanceConverter {
             String quantity = root.get("q").asText();
             long timestamp = root.get("T").asLong();
 
+            String base = "";
+            String currency = "";
+            
+            // 지원하는 base currency 확인
+            if (symbol.endsWith("USDT")) {
+                base = "USDT";
+                currency = symbol.substring(0, symbol.length() - base.length());
+            } else if (symbol.endsWith("BTC")) {
+                base = "BTC";
+                currency = symbol.substring(0, symbol.length() - base.length());
+            } else {
+                log.warn("[컨버터] 지원하지 않는 심볼 형식: {}", symbol);
+                return null;
+            }
+
             StandardExchangeData data = StandardExchangeData.builder()
                 .exchange(message.exchange())
-                .currencyPair(new CurrencyPair(symbol.substring(3), symbol.substring(0, 3)))
+                .currencyPair(new CurrencyPair(base, currency))
                 .price(new BigDecimal(price))
                 .volume(new BigDecimal(quantity))
                 .timestamp(Instant.ofEpochMilli(timestamp))

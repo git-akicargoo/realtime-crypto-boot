@@ -1,3 +1,11 @@
+수정이 필요한 부분:
+바이낸스 컨버터의 페어 포맷팅 수정 (EUSDT-DOG → DOGE-USDT)
+빗썸 프로토콜 구현체 점검
+바이낸스 BTC 마켓 구독 확인
+
+
+
+
 com.example.boot.exchange/
 ├── core/                           # Layer 1
 │   ├── protocol/
