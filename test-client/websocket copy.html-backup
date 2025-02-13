@@ -76,6 +76,9 @@
             border-radius: 4px;
             display: none;  /* 기본적으로 메시지는 숨김 */
         }
+        .debug-toggle {
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -86,7 +89,6 @@
             <button onclick="connect()" id="connectBtn">Connect</button>
             <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
             <button onclick="clearData()">Clear Data</button>
-            <button onclick="toggleDebugMessages()">Toggle Debug Messages</button>
         </div>
         
         <div class="currency-filter">
@@ -111,6 +113,9 @@
             </tbody>
         </table>
 
+        <div class="debug-toggle">
+            <button onclick="toggleDebugMessages()">Toggle Debug Messages</button>
+        </div>
         <div id="messages"></div>
     </div>
 
@@ -133,13 +138,26 @@
             const tbody = document.getElementById('priceTableBody');
             tbody.innerHTML = '';
 
+            console.log('Updating table with base currency:', currentBaseCurrency);  // 현재 base currency 확인
+            console.log('Available price data:', priceData);  // 사용 가능한 데이터 확인
+
             // 현재 선택된 base currency에 대한 데이터만 필터링
             const relevantData = Object.entries(priceData).filter(([pair]) => {
-                return pair.split('/')[1] === currentBaseCurrency;
+                const [, base] = pair.split('/');
+                return base === currentBaseCurrency;
+            });
+
+            console.log('Filtered data for table:', relevantData);  // 필터링된 데이터 확인
+
+            // 데이터 정렬 (알파벳 순)
+            relevantData.sort(([pairA], [pairB]) => {
+                const currencyA = pairA.split('/')[0];
+                const currencyB = pairB.split('/')[0];
+                return currencyA.localeCompare(currencyB);
             });
 
             relevantData.forEach(([pair, data]) => {
-                const [currency, base] = pair.split('/');
+                const [currency] = pair.split('/');
                 const row = document.createElement('tr');
                 
                 row.innerHTML = `
@@ -181,6 +199,9 @@
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    console.log('Raw WebSocket data:', data);  // 원본 데이터 확인
+                    
+                    // 데이터 처리 (테이블 업데이트)
                     processExchangeData(data);
                 } catch (e) {
                     console.error('Error parsing message:', e);
@@ -227,8 +248,12 @@
                 // 가격 업데이트
                 priceData[pair][data.exchange.toLowerCase()] = data.price;
                 
-                // 디버그 메시지 추가
-                addMessage(`${data.exchange}: ${currency}/${base} = ${data.price}`, 'info');
+                console.log('Updated price data:', {
+                    pair,
+                    exchange: data.exchange,
+                    price: data.price,
+                    allPrices: priceData[pair]
+                });
                 
                 // 현재 base currency에 맞는 데이터만 테이블 업데이트
                 if (base === currentBaseCurrency) {
@@ -236,7 +261,6 @@
                 }
             } catch (error) {
                 console.error('Error processing data:', error);
-                addMessage('Error: ' + error.message, 'error');
             }
         }
 
@@ -257,14 +281,6 @@
             const messageElement = document.createElement('div');
             messageElement.className = 'message ' + type;
             messageElement.textContent = message;
-            
-            // 최대 메시지 개수 제한 (예: 100개)
-            const maxMessages = 100;
-            const messages = messagesDiv.children;
-            if (messages.length >= maxMessages) {
-                messagesDiv.removeChild(messages[0]); // 가장 오래된 메시지 제거
-            }
-            
             messagesDiv.appendChild(messageElement);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }

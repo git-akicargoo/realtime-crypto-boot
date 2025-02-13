@@ -65,7 +65,7 @@ public class FrontendWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        log.debug("Frontend WebSocket disconnected: {}", session.getId());
+        log.info("Frontend WebSocket disconnected: {}, status: {}", session.getId(), status);
         sessions.remove(session.getId());
     }
 
