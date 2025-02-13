@@ -68,31 +68,48 @@ public class BinanceMarketTest {
                                 assertThat(msg).contains("\"result\":null");
                             }
                             // 거래 데이터 확인
-                            else if (msg.contains("\"e\":\"trade\"")) {
+                            else if (msg.contains("\"e\":\"24hrTicker\"")) {
                                 JsonNode node;
                                 try {
                                     node = new ObjectMapper().readTree(msg);
                                     String symbol = node.get("s").asText();
-                                    String price = node.get("p").asText();
-                                    log.info("Trade data - Symbol: {}, Price: {}", symbol, price);
+                                    String price = node.get("c").asText();      // 현재가
+                                    String high = node.get("h").asText();       // 고가
+                                    String low = node.get("l").asText();        // 저가
+                                    String priceChange = node.get("p").asText(); // 가격 변화
+                                    String priceChangePercent = node.get("P").asText(); // 변화율
+                                    String volume = node.get("v").asText();      // 거래량
+
+                                    log.info("Ticker data for {}: \n" +
+                                        "  Current Price: {} \n" +
+                                        "  24h High: {} \n" +
+                                        "  24h Low: {} \n" +
+                                        "  24h Change: {} ({} %) \n" +
+                                        "  24h Volume: {}", 
+                                        symbol, price, high, low, priceChange, priceChangePercent, volume);
                                     
                                     // 메시지 형식 검증
                                     assertThat(node.has("e")).isTrue();
                                     assertThat(node.has("s")).isTrue();
+                                    assertThat(node.has("c")).isTrue();
+                                    assertThat(node.has("h")).isTrue();
+                                    assertThat(node.has("l")).isTrue();
                                     assertThat(node.has("p")).isTrue();
+                                    assertThat(node.has("P")).isTrue();
+                                    assertThat(node.has("v")).isTrue();
                                 } catch (Exception e) {
                                     log.error("Error parsing message: {}", e.getMessage());
-                                    fail("Failed to parse trade message");
+                                    fail("Failed to parse ticker message");
                                 }
                             }
                         })
                         // 구독 응답 메시지를 받은 후 첫 번째 거래 메시지만 확인
-                        .takeUntil(msg -> msg.contains("\"e\":\"trade\""))
+                        .takeUntil(msg -> msg.contains("\"e\":\"24hrTicker\""))
                     )
                     .doFinally(signalType -> {
                         handler.disconnect().subscribe();
                     });
             })
-            .blockLast(Duration.ofSeconds(5));  // 충분히 짧은 시간
+            .blockLast(Duration.ofSeconds(10));  // 5초 -> 10초로 증가
     }
 } 

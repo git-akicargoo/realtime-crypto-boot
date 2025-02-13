@@ -14,34 +14,27 @@ public class BithumbProtocolImpl implements BithumbExchangeProtocol {
     /**
      * Bithumb WebSocket 구독 메시지 포맷:
      * {
-     *   "type": "transaction",
+     *   "type": "ticker",
      *   "symbols": ["BTC_KRW"]  // 대문자, _ 구분자 사용
      * }
      */
     @Override
     public String createSubscribeMessage(List<CurrencyPair> pairs) {
         String symbols = pairs.stream()
-            .map(CurrencyPair::formatForBithumb)
-            .map(symbol -> "\"" + symbol + "\"")
-            .collect(Collectors.joining(","));
+            .map(pair -> String.format("%s_%s", pair.symbol(), pair.quoteCurrency()))
+            .collect(Collectors.joining("\",\""));
         
+        // ticker 구독 메시지만 사용
         return String.format(
-            "{\"type\":\"transaction\",\"symbols\":[%s]}",
+            "{\"type\":\"ticker\",\"symbols\":[\"%s\"],\"tickTypes\":[\"24H\"]}",
             symbols
         );
     }
     
     @Override
     public String createUnsubscribeMessage(List<CurrencyPair> pairs) {
-        String symbols = pairs.stream()
-            .map(CurrencyPair::formatForBithumb)
-            .map(symbol -> "\"" + symbol + "\"")
-            .collect(Collectors.joining(","));
-            
-        return String.format(
-            "{\"type\":\"transaction\",\"symbols\":[%s]}",
-            symbols
-        );
+        // 구독 해제도 동일한 형식 사용
+        return createSubscribeMessage(pairs);
     }
     
     @Override

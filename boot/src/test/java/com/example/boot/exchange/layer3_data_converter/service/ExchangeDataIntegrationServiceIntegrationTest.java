@@ -23,7 +23,7 @@ class ExchangeDataIntegrationServiceIntegrationTest {
     void subscribe_ShouldStreamRealTimeData() {
         // when
         Flux<StandardExchangeData> dataStream = integrationService.subscribe()
-            .take(Duration.ofSeconds(5))
+            .take(Duration.ofSeconds(10))
             .doOnSubscribe(s -> log.info("Subscription started"))
             .doOnNext(data -> 
                 log.info("Received exchange data - Exchange: {}, Pair: {}, Price: {}", 
@@ -38,7 +38,7 @@ class ExchangeDataIntegrationServiceIntegrationTest {
         // then
         StepVerifier.create(dataStream)
             .expectSubscription()
-            .thenAwait(Duration.ofSeconds(5))
+            .thenAwait(Duration.ofSeconds(10))
             .thenConsumeWhile(data -> true)
             .verifyComplete();
     }

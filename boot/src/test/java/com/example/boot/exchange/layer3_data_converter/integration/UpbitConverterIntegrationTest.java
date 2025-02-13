@@ -65,7 +65,7 @@ class UpbitConverterIntegrationTest {
                             protocol.getExchangeName(),
                             rawMessage,
                             java.time.Instant.now(),
-                            ExchangeMessage.MessageType.TRADE
+                            ExchangeMessage.MessageType.TICKER
                         );
                         log.info("[7] ExchangeMessage 생성 완료: {}", msg);
                         

@@ -153,8 +153,10 @@ public class ExchangeDataIntegrationServiceImpl implements ExchangeDataIntegrati
                 return sendSubscribeMessage(exchange, handler, protocol, pairs)
                     .thenMany(handler.receiveMessage())
                     .map(raw -> new ExchangeMessage(
-                        exchange, raw, Instant.now(), 
-                        ExchangeMessage.MessageType.TRADE
+                        exchange, 
+                        raw, 
+                        Instant.now(), 
+                        ExchangeMessage.MessageType.TICKER
                     ))
                     .flatMap(msg -> converter.convert(msg)
                         .doOnError(e -> log.error("Error converting message from {}: {}", 

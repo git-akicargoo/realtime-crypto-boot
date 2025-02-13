@@ -1,23 +1,27 @@
 package com.example.boot.exchange.layer1_core.protocol.binance;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import com.example.boot.exchange.layer1_core.model.CurrencyPair;
 import com.example.boot.exchange.layer1_core.protocol.BinanceExchangeProtocol;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
 
 @SpringBootTest
+@Slf4j
 class BinanceProtocolImplTest {
-    private static final Logger log = LoggerFactory.getLogger(BinanceProtocolImplTest.class);
-
+    
     @Autowired
     private BinanceExchangeProtocol protocol;
     
@@ -44,9 +48,18 @@ class BinanceProtocolImplTest {
         log.info("Binance subscribe message: {}", message);
         
         // then
-        assertThat(message).isEqualTo(
-            "{\"method\":\"SUBSCRIBE\",\"params\":[\"btcusdt@trade\",\"ethusdt@trade\"],\"id\":1}"
-        );
+        // ObjectMapper를 사용하여 JSON 문자열을 객체로 변환 후 다시 문자열로 변환하여 비교
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode expectedNode = mapper.readTree(
+                "{\"method\":\"SUBSCRIBE\",\"params\":[\"btcusdt@ticker\",\"ethusdt@ticker\"],\"id\":1}"
+            );
+            JsonNode actualNode = mapper.readTree(message);
+            
+            assertThat(actualNode).isEqualTo(expectedNode);
+        } catch (JsonProcessingException e) {
+            fail("Failed to parse JSON", e);
+        }
     }
     
     @Test
@@ -63,9 +76,17 @@ class BinanceProtocolImplTest {
         log.info("Binance unsubscribe message: {}", message);
         
         // then
-        assertThat(message).isEqualTo(
-            "{\"method\":\"UNSUBSCRIBE\",\"params\":[\"btcusdt@trade\",\"ethusdt@trade\"],\"id\":1}"
-        );
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode expectedNode = mapper.readTree(
+                "{\"method\":\"UNSUBSCRIBE\",\"params\":[\"btcusdt@ticker\",\"ethusdt@ticker\"],\"id\":1}"
+            );
+            JsonNode actualNode = mapper.readTree(message);
+            
+            assertThat(actualNode).isEqualTo(expectedNode);
+        } catch (JsonProcessingException e) {
+            fail("Failed to parse JSON", e);
+        }
     }
     
     @Test

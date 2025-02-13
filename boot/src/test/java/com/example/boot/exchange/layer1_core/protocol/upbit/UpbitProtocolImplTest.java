@@ -45,7 +45,7 @@ class UpbitProtocolImplTest {
         
         // then
         assertThat(message).isEqualTo(
-            "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[\"KRW-BTC\",\"KRW-ETH\"]},{\"format\":\"SIMPLE\"}]"
+            "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"ticker\",\"codes\":[\"KRW-BTC\",\"KRW-ETH\"]},{\"format\":\"SIMPLE\"}]"
         );
     }
     
@@ -64,7 +64,7 @@ class UpbitProtocolImplTest {
         
         // then
         assertThat(message).isEqualTo(
-            "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[\"KRW-BTC\",\"KRW-ETH\"]}]"
+            "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"ticker\",\"codes\":[\"KRW-BTC\",\"KRW-ETH\"]},{\"format\":\"SIMPLE\"}]"
         );
     }
     

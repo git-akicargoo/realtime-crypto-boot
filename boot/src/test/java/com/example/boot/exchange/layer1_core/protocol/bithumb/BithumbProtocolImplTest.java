@@ -36,7 +36,7 @@ class BithumbProtocolImplTest {
         
         // then
         assertThat(message).isEqualTo(
-            "{\"type\":\"transaction\",\"symbols\":[\"BTC_KRW\",\"ETH_KRW\"]}"
+            "{\"type\":\"ticker\",\"symbols\":[\"BTC_KRW\",\"ETH_KRW\"],\"tickTypes\":[\"24H\"]}"
         );
     }
     
@@ -55,7 +55,7 @@ class BithumbProtocolImplTest {
         
         // then
         assertThat(message).isEqualTo(
-            "{\"type\":\"transaction\",\"symbols\":[\"BTC_KRW\",\"ETH_KRW\"]}"
+            "{\"type\":\"ticker\",\"symbols\":[\"BTC_KRW\",\"ETH_KRW\"],\"tickTypes\":[\"24H\"]}"
         );
     }
     

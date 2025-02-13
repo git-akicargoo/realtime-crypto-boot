@@ -18,19 +18,24 @@ public class UpbitProtocolImpl implements UpbitExchangeProtocol {
      *     "ticket": "UNIQUE_TICKET"
      *   },
      *   {
-     *     "type": "trade",
+     *     "type": "ticker",
      *     "codes": ["KRW-BTC"]  // 대문자, - 구분자 사용
+     *   },
+     *   {
+     *     "format": "SIMPLE"
      *   }
      * ]
      */
     @Override
     public String createSubscribeMessage(List<CurrencyPair> pairs) {
         String codes = pairs.stream()
-            .map(pair -> "\"" + pair.formatForUpbit() + "\"")
-            .collect(Collectors.joining(","));
+            .map(CurrencyPair::formatForUpbit)
+            .collect(Collectors.joining("\",\"", "\"", "\""));
         
         return String.format(
-            "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[%s]},{\"format\":\"SIMPLE\"}]",
+            "[{\"ticket\":\"UNIQUE_TICKET\"}," +
+            "{\"type\":\"ticker\",\"codes\":[%s]}," +
+            "{\"format\":\"SIMPLE\"}]",
             codes
         );
     }
@@ -38,11 +43,13 @@ public class UpbitProtocolImpl implements UpbitExchangeProtocol {
     @Override
     public String createUnsubscribeMessage(List<CurrencyPair> pairs) {
         String codes = pairs.stream()
-            .map(pair -> "\"" + pair.formatForUpbit() + "\"")
-            .collect(Collectors.joining(","));
-            
+            .map(CurrencyPair::formatForUpbit)
+            .collect(Collectors.joining("\",\"", "\"", "\""));
+        
         return String.format(
-            "[{\"ticket\":\"UNIQUE_TICKET\"},{\"type\":\"trade\",\"codes\":[%s]}]",
+            "[{\"ticket\":\"UNIQUE_TICKET\"}," +
+            "{\"type\":\"ticker\",\"codes\":[%s]}," +
+            "{\"format\":\"SIMPLE\"}]",
             codes
         );
     }

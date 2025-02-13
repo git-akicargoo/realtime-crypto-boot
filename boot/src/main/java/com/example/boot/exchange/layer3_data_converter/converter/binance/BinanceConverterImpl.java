@@ -28,62 +28,35 @@ public class BinanceConverterImpl implements BinanceConverter {
     @Override
     public Mono<StandardExchangeData> convert(ExchangeMessage message) {
         return Mono.fromCallable(() -> {
-            JsonNode root = objectMapper.readTree(message.rawMessage());
-            
-            // 구독 응답 메시지 체크
-            if (root.has("result")) {
-                log.debug("[컨버터-1] 구독 응답 수신: {}", message.rawMessage());
-                return null;
+            JsonNode node = objectMapper.readTree(message.rawMessage());
+            String eventType = node.get("e").asText();
+
+            // 24시간 Ticker 데이터만 처리
+            if ("24hrTicker".equals(eventType)) {
+                String symbol = node.get("s").asText();
+                String[] currencies = symbol.toUpperCase().split("USDT");
+                String baseSymbol = currencies[0];  // BTC, ETH 등
+
+                return StandardExchangeData.builder()
+                    .exchange(EXCHANGE_NAME)
+                    .currencyPair(new CurrencyPair("USDT", baseSymbol))
+                    .price(new BigDecimal(node.get("c").asText()))        // closePrice
+                    .volume(new BigDecimal(node.get("v").asText()))       // volume
+                    .highPrice(new BigDecimal(node.get("h").asText()))    // highPrice
+                    .lowPrice(new BigDecimal(node.get("l").asText()))     // lowPrice
+                    .priceChange(new BigDecimal(node.get("p").asText()))  // priceChange
+                    .priceChangePercent(new BigDecimal(node.get("P").asText())) // priceChangePercent
+                    .volume24h(new BigDecimal(node.get("v").asText()))    // volume24h
+                    .timestamp(Instant.ofEpochMilli(node.get("E").asLong()))
+                    .metadata(new HashMap<>())
+                    .build();
             }
 
-            // 실제 거래 데이터 처리
-            if (!root.has("e") || !"trade".equals(root.get("e").asText())) {
-                log.debug("[컨버터-2] 무시된 메시지: {}", message.rawMessage());
-                return null;
-            }
-
-            log.debug("[컨버터-3] 거래 데이터 수신: {}", message.rawMessage());
-
-            String symbol = root.get("s").asText();
-            String price = root.get("p").asText();
-            String quantity = root.get("q").asText();
-            long timestamp = root.get("T").asLong();
-
-            String base = "";
-            String currency = "";
-            
-            // 지원하는 base currency 확인
-            if (symbol.endsWith("USDT")) {
-                base = "USDT";
-                currency = symbol.substring(0, symbol.length() - base.length());
-            } else if (symbol.endsWith("BTC")) {
-                base = "BTC";
-                currency = symbol.substring(0, symbol.length() - base.length());
-            } else {
-                log.warn("[컨버터] 지원하지 않는 심볼 형식: {}", symbol);
-                return null;
-            }
-
-            StandardExchangeData data = StandardExchangeData.builder()
-                .exchange(message.exchange())
-                .currencyPair(new CurrencyPair(base, currency))
-                .price(new BigDecimal(price))
-                .volume(new BigDecimal(quantity))
-                .timestamp(Instant.ofEpochMilli(timestamp))
-                .metadata(new HashMap<>())
-                .build();
-
-            log.debug("[컨버터-4] 변환 완료: exchange={}, pair={}, price={}, volume={}", 
-                data.getExchange(), 
-                data.getCurrencyPair(),
-                data.getPrice(), 
-                data.getVolume());
-
-            return data;
+            return null;
         })
         .filter(Objects::nonNull)
         .onErrorResume(e -> {
-            log.error("[컨버터-5] 변환 실패: {}", e.getMessage());
+            log.error("Failed to convert message: {}", e.getMessage());
             return Mono.empty();
         });
     }

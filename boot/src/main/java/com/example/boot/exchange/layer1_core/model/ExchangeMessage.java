@@ -9,7 +9,7 @@ public record ExchangeMessage(
     MessageType type
 ) {
     public enum MessageType {
-        TRADE,
+        TICKER,
         HEARTBEAT,
         ERROR,
         SUBSCRIBE,

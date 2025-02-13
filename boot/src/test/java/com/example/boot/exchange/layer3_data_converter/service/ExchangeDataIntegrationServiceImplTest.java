@@ -28,7 +28,7 @@ class ExchangeDataIntegrationServiceImplTest {
 
     private static final StringBuilder finalResultBuilder = new StringBuilder();
     private static final Map<String, Boolean> testResults = new ConcurrentHashMap<>();
-    private static final int TIMEOUT_SECONDS = 30; // 타임아웃 시간 증가
+    private static final int TIMEOUT_SECONDS = 30;  // 타임아웃 시간을 30초로 증가
 
     @Autowired
     private ExchangeDataIntegrationService service;

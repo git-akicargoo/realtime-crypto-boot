@@ -28,41 +28,32 @@ public class UpbitConverterImpl implements UpbitConverter {
     @Override
     public Mono<StandardExchangeData> convert(ExchangeMessage message) {
         return Mono.fromCallable(() -> {
-            JsonNode root = objectMapper.readTree(message.rawMessage());
-            
-            // 메시지 타입 체크 ("ty" 필드가 "trade"인지 확인)
-            if (!root.has("ty") || !"trade".equals(root.get("ty").asText())) {
-                log.debug("[컨버터-1] 무시된 메시지: {}", message.rawMessage());
-                return null;
+            JsonNode node = objectMapper.readTree(message.rawMessage());
+            String type = node.get("ty").asText();
+
+            // Ticker 데이터만 처리
+            if ("ticker".equals(type)) {
+                String code = node.get("cd").asText();
+                String[] currencies = code.split("-");
+                String quoteCurrency = currencies[0];  // KRW
+                String baseSymbol = currencies[1];     // BTC, ETH 등
+
+                return StandardExchangeData.builder()
+                    .exchange(EXCHANGE_NAME)
+                    .currencyPair(new CurrencyPair(quoteCurrency, baseSymbol))
+                    .price(new BigDecimal(node.get("tp").asText()))
+                    .volume(new BigDecimal(node.get("tv").asText()))
+                    .highPrice(new BigDecimal(node.get("hp").asText()))
+                    .lowPrice(new BigDecimal(node.get("lp").asText()))
+                    .priceChange(new BigDecimal(node.get("cp").asText()))
+                    .priceChangePercent(new BigDecimal(node.get("cr").asText()))
+                    .volume24h(new BigDecimal(node.get("atv").asText()))
+                    .timestamp(Instant.ofEpochMilli(node.get("tms").asLong()))
+                    .metadata(new HashMap<>())
+                    .build();
             }
 
-            log.debug("[컨버터-2] 거래 데이터 수신: {}", message.rawMessage());
-
-            String code = root.get("cd").asText();  // "KRW-BTC" 형식
-            String price = root.get("tp").asText();  // trade price
-            String volume = root.get("tv").asText();  // trade volume
-            long timestamp = root.get("tms").asLong();  // timestamp
-
-            // code를 base와 quote로 분리 (KRW-BTC -> KRW, BTC)
-            String[] parts = code.split("-");
-            CurrencyPair currencyPair = new CurrencyPair(parts[0], parts[1]);
-
-            StandardExchangeData data = StandardExchangeData.builder()
-                .exchange(message.exchange())
-                .currencyPair(currencyPair)
-                .price(new BigDecimal(price))
-                .volume(new BigDecimal(volume))
-                .timestamp(Instant.ofEpochMilli(timestamp))
-                .metadata(new HashMap<>())
-                .build();
-
-            log.debug("[컨버터-3] 변환 완료: exchange={}, pair={}, price={}, volume={}", 
-                data.getExchange(), 
-                data.getCurrencyPair(),
-                data.getPrice(), 
-                data.getVolume());
-
-            return data;
+            return null;
         })
         .filter(Objects::nonNull)
         .onErrorResume(e -> {

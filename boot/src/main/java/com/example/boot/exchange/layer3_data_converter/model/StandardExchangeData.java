@@ -17,6 +17,12 @@ public class StandardExchangeData {
     private final BigDecimal price;         // 현재가
     private final BigDecimal volume;        // 거래량
     private final Instant timestamp;        // 타임스탬프
+    // 24시간 통계 데이터 필드 추가
+    private final BigDecimal highPrice;     // 고가
+    private final BigDecimal lowPrice;      // 저가
+    private final BigDecimal priceChange;   // 가격 변동
+    private final BigDecimal priceChangePercent; // 등락률
+    private final BigDecimal volume24h;     // 24시간 거래량
     private final Map<String, Object> metadata; // 거래소별 추가 데이터
 
     @Override
@@ -29,6 +35,11 @@ public class StandardExchangeData {
             │ Pair       : %s
             │ Price      : %s
             │ Volume     : %s
+            │ High       : %s
+            │ Low        : %s
+            │ Change     : %s
+            │ Change%%    : %s
+            │ Volume 24h : %s
             │ Timestamp  : %s
             │ Metadata   : %s
             └─────────────────────────────────────────────""",
@@ -36,6 +47,11 @@ public class StandardExchangeData {
             currencyPair,
             price,
             volume,
+            highPrice,
+            lowPrice,
+            priceChange,
+            priceChangePercent,
+            volume24h,
             timestamp,
             metadata);
     }

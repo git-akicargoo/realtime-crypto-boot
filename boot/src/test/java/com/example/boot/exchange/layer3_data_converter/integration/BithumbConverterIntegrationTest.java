@@ -3,6 +3,7 @@ package com.example.boot.exchange.layer3_data_converter.integration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,7 @@ import com.example.boot.exchange.layer1_core.model.ExchangeMessage;
 import com.example.boot.exchange.layer1_core.protocol.BithumbExchangeProtocol;
 import com.example.boot.exchange.layer2_websocket.connection.ConnectionFactory;
 import com.example.boot.exchange.layer3_data_converter.converter.bithumb.BithumbConverter;
+import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeData;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,15 +35,18 @@ class BithumbConverterIntegrationTest {
 
     @Test
     @DisplayName("빗썸 실시간 데이터 변환 테스트")
-    void shouldConvertBithumbRealTimeData() {
+    void shouldConvertBithumbRealTimeData() throws InterruptedException {
+        // given
         List<CurrencyPair> pairs = List.of(
             new CurrencyPair("KRW", "BTC")
         );
 
         CountDownLatch latch = new CountDownLatch(5);
+        AtomicInteger successCount = new AtomicInteger(0);
 
         log.info("[1] 테스트 시작");
 
+        // when
         connectionFactory.createConnection(
             protocol.getExchangeName(),
             config.getWebsocket().getBithumb()
@@ -58,39 +63,64 @@ class BithumbConverterIntegrationTest {
                     .doOnNext(rawMessage -> {
                         log.info("[6] 원본 메시지 수신: {}", rawMessage);
                         
+                        // 구독 응답 메시지 무시
+                        if (rawMessage.contains("\"status\":\"0000\"")) {
+                            log.info("[6-1] 구독 응답 메시지 수신");
+                            return;
+                        }
+
                         ExchangeMessage msg = new ExchangeMessage(
                             protocol.getExchangeName(),
                             rawMessage,
                             java.time.Instant.now(),
-                            ExchangeMessage.MessageType.TRADE
+                            ExchangeMessage.MessageType.TICKER
                         );
                         log.info("[7] ExchangeMessage 생성 완료: {}", msg);
                         
                         converter.convert(msg)
                             .doOnNext(converted -> {
-                                log.info("[8] 변환 완료: {}", converted);
+                                if (converted != null) {
+                                    validateConvertedData(converted);
+                                    log.info("[8] 변환 완료: {}", converted);
+                                    successCount.incrementAndGet();
+                                    latch.countDown();
+                                }
+                            })
+                            .doOnError(error -> {
+                                log.error("[9] 변환 중 에러 발생: ", error);
                                 latch.countDown();
                             })
-                            .doOnError(error -> log.error("[9] 변환 중 에러 발생: ", error))
                             .subscribe();
                     })
                 );
         })
         .subscribe(
             data -> log.info("[10] 데이터 처리 완료"),
-            error -> log.error("[11] 에러 발생: ", error),
+            error -> {
+                log.error("[11] 에러 발생: ", error);
+                latch.countDown();
+            },
             () -> log.info("[12] 스트림 완료")
         );
 
+        // then
         log.info("[13] 메시지 대기 중...");
-        try {
-            if (!latch.await(3, TimeUnit.SECONDS)) {
-                log.warn("[14] 타임아웃 발생");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(e);
+        if (!latch.await(15, TimeUnit.SECONDS)) {
+            log.warn("[14] 타임아웃 발생");
         }
-        log.info("[15] 테스트 종료");
+        
+        log.info("[15] 테스트 종료 - 성공적으로 변환된 메시지 수: {}", successCount.get());
+        assert successCount.get() > 0 : "최소 1개 이상의 메시지가 성공적으로 변환되어야 합니다.";
+    }
+
+    private void validateConvertedData(StandardExchangeData data) {
+        assert data.getExchange().equals("bithumb") : "거래소 이름이 일치하지 않습니다.";
+        assert data.getPrice() != null : "가격이 null입니다.";
+        assert data.getVolume() != null : "거래량이 null입니다.";
+        assert data.getHighPrice() != null : "고가가 null입니다.";
+        assert data.getLowPrice() != null : "저가가 null입니다.";
+        assert data.getPriceChange() != null : "변동가가 null입니다.";
+        assert data.getPriceChangePercent() != null : "변동률이 null입니다.";
+        assert data.getTimestamp() != null : "타임스탬프가 null입니다.";
     }
 } 
