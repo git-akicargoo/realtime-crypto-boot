@@ -32,11 +32,11 @@ public class UpbitConverterImpl implements UpbitConverter {
             
             // 메시지 타입 체크 ("ty" 필드가 "trade"인지 확인)
             if (!root.has("ty") || !"trade".equals(root.get("ty").asText())) {
-                log.info("[컨버터-1] 무시된 메시지: {}", message.rawMessage());
+                log.debug("[컨버터-1] 무시된 메시지: {}", message.rawMessage());
                 return null;
             }
 
-            log.info("[컨버터-2] 거래 데이터 수신: {}", message.rawMessage());
+            log.debug("[컨버터-2] 거래 데이터 수신: {}", message.rawMessage());
 
             String code = root.get("cd").asText();  // "KRW-BTC" 형식
             String price = root.get("tp").asText();  // trade price
@@ -56,7 +56,7 @@ public class UpbitConverterImpl implements UpbitConverter {
                 .metadata(new HashMap<>())
                 .build();
 
-            log.info("[컨버터-3] 변환 완료: exchange={}, pair={}, price={}, volume={}", 
+            log.debug("[컨버터-3] 변환 완료: exchange={}, pair={}, price={}, volume={}", 
                 data.getExchange(), 
                 data.getCurrencyPair(),
                 data.getPrice(), 

@@ -14,20 +14,16 @@
         </encoder>
     </appender>
 
-    <!-- 로그 레벨 설정 -->
-    <logger name="com.example.boot" level="DEBUG"/>
+    <!-- 스프링 기본 로그 레벨 -->
     <logger name="org.springframework" level="INFO"/>
     <logger name="org.springframework.web" level="INFO"/>
-    
-    <!-- 테스트 관련 패키지는 DEBUG 레벨로 설정 -->
-    <logger name="com.example.boot.exchange_layer.layer3_exchange_protocol" level="DEBUG"/>
-
-    <!-- WebSocket 관련 로그 레벨을 INFO로 변경 -->
-    <logger name="com.example.boot.exchange.layer2_websocket" level="INFO"/>
     <logger name="org.springframework.web.reactive.socket" level="INFO"/>
     <logger name="reactor.netty.http.client" level="INFO"/>
 
-    <root level="INFO">
+    <!-- application.yml의 설정을 따르도록 함 -->
+    <springProperty scope="context" name="LOG_LEVEL" source="logging.level.root"/>
+    
+    <root level="${LOG_LEVEL:-INFO}">
         <appender-ref ref="CONSOLE" />
     </root>
 </configuration> 

@@ -32,17 +32,17 @@ public class BinanceConverterImpl implements BinanceConverter {
             
             // 구독 응답 메시지 체크
             if (root.has("result")) {
-                log.info("[컨버터-1] 구독 응답 수신: {}", message.rawMessage());
+                log.debug("[컨버터-1] 구독 응답 수신: {}", message.rawMessage());
                 return null;
             }
 
             // 실제 거래 데이터 처리
             if (!root.has("e") || !"trade".equals(root.get("e").asText())) {
-                log.info("[컨버터-2] 무시된 메시지: {}", message.rawMessage());
+                log.debug("[컨버터-2] 무시된 메시지: {}", message.rawMessage());
                 return null;
             }
 
-            log.info("[컨버터-3] 거래 데이터 수신: {}", message.rawMessage());
+            log.debug("[컨버터-3] 거래 데이터 수신: {}", message.rawMessage());
 
             String symbol = root.get("s").asText();
             String price = root.get("p").asText();
@@ -73,7 +73,7 @@ public class BinanceConverterImpl implements BinanceConverter {
                 .metadata(new HashMap<>())
                 .build();
 
-            log.info("[컨버터-4] 변환 완료: exchange={}, pair={}, price={}, volume={}", 
+            log.debug("[컨버터-4] 변환 완료: exchange={}, pair={}, price={}, volume={}", 
                 data.getExchange(), 
                 data.getCurrencyPair(),
                 data.getPrice(), 

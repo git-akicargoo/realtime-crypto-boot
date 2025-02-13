@@ -35,20 +35,20 @@ public class BithumbConverterImpl implements BithumbConverter {
             
             // 메시지 타입 체크
             if (!root.has("type") || !"transaction".equals(root.get("type").asText())) {
-                log.info("[컨버터-1] 무시된 메시지: {}", message.rawMessage());
+                log.debug("[컨버터-1] 무시된 메시지: {}", message.rawMessage());
                 return null;
             }
 
             // content와 list 체크
             JsonNode content = root.get("content");
             if (content == null || !content.has("list") || content.get("list").size() == 0) {
-                log.info("[컨버터-2] 무시된 메시지 (거래 데이터 없음): {}", message.rawMessage());
+                log.debug("[컨버터-2] 무시된 메시지 (거래 데이터 없음): {}", message.rawMessage());
                 return null;
             }
 
             // 첫 번째 거래 데이터 사용
             JsonNode trade = content.get("list").get(0);
-            log.info("[컨버터-3] 거래 데이터 수신: {}", trade);
+            log.debug("[컨버터-3] 거래 데이터 수신: {}", trade);
 
             String symbol = trade.get("symbol").asText();  // "BTC_KRW" 형식
             String price = trade.get("contPrice").asText();
@@ -73,7 +73,7 @@ public class BithumbConverterImpl implements BithumbConverter {
                 .metadata(new HashMap<>())
                 .build();
 
-            log.info("[컨버터-4] 변환 완료: exchange={}, pair={}, price={}, volume={}", 
+            log.debug("[컨버터-4] 변환 완료: exchange={}, pair={}, price={}, volume={}", 
                 data.getExchange(), 
                 data.getCurrencyPair(),
                 data.getPrice(), 

@@ -56,6 +56,14 @@ app:
     leader:
       partition: 0            # 리더 선출용 파티션 번호
 
+
+logging:
+  level:
+    root: INFO    # 기본값은 INFO로 설정
+    # com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationServiceImpl: DEBUG  # 디버그 로그 유지
+    # com.example.boot.exchange.layer3_data_converter.converter: DEBUG  # 컨버터는 INFO만
+    # com.example.boot.web.websocket.handler.FrontendWebSocketHandler: DEBUG  # 웹소켓은 INFO만      
+
 ---
 # 로컬 개발 환경
 spring:

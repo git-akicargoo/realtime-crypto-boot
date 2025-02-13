@@ -9,7 +9,7 @@
             background-color: #f5f5f5;
         }
         .container {
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
             background-color: white;
             padding: 20px;
@@ -22,23 +22,33 @@
             background-color: #f8f9fa;
             border-radius: 4px;
         }
-        .message {
-            margin: 10px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .error { color: #dc3545; }
-        .success { color: #28a745; }
-        .info { color: #17a2b8; }
-        #messages {
-            height: 400px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            padding: 10px;
+        .currency-filter {
             margin: 10px 0;
-            border-radius: 4px;
         }
+        .currency-filter button {
+            margin-right: 5px;
+        }
+        .price-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            display: table;  /* 테이블이 항상 보이도록 */
+        }
+        .price-table th, .price-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: right;
+            background-color: white;  /* 배경색 추가 */
+        }
+        .price-table th {
+            background-color: #f8f9fa;
+            text-align: center;  /* 헤더는 중앙 정렬 */
+        }
+        .price-table td:first-child {
+            text-align: left;
+        }
+        .price-up { color: #28a745; }
+        .price-down { color: #dc3545; }
         button {
             padding: 8px 16px;
             margin-right: 10px;
@@ -48,28 +58,126 @@
             background-color: #007bff;
             color: white;
         }
+        button.active {
+            background-color: #0056b3;
+        }
         button:hover {
             background-color: #0056b3;
         }
         button:disabled {
             background-color: #ccc;
         }
+        #messages {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 20px;
+            border-radius: 4px;
+            display: none;  /* 기본적으로 메시지는 숨김 */
+        }
+        .debug-toggle {
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Exchange WebSocket Test</h2>
+        <h2>Exchange Price Monitor</h2>
         <div class="controls">
             <p>Status: <span id="status" class="info">Disconnected</span></p>
             <button onclick="connect()" id="connectBtn">Connect</button>
             <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
-            <button onclick="clearMessages()">Clear Messages</button>
+            <button onclick="clearData()">Clear Data</button>
+        </div>
+        
+        <div class="currency-filter">
+            <strong>Base Currency:</strong>
+            <button onclick="setBaseCurrency('KRW')" class="active">KRW</button>
+            <button onclick="setBaseCurrency('BTC')">BTC</button>
+            <button onclick="setBaseCurrency('USDT')">USDT</button>
+        </div>
+
+        <table class="price-table">
+            <thead>
+                <tr>
+                    <th>Currency</th>
+                    <th>Time</th>
+                    <th>Upbit</th>
+                    <th>Bithumb</th>
+                    <th>Binance</th>
+                </tr>
+            </thead>
+            <tbody id="priceTableBody">
+                <!-- 데이터가 여기에 동적으로 추가됨 -->
+            </tbody>
+        </table>
+
+        <div class="debug-toggle">
+            <button onclick="toggleDebugMessages()">Toggle Debug Messages</button>
         </div>
         <div id="messages"></div>
     </div>
 
     <script>
         let ws = null;
+        let currentBaseCurrency = 'KRW';
+        let priceData = {};
+
+        function setBaseCurrency(currency) {
+            currentBaseCurrency = currency;
+            // 버튼 스타일 업데이트
+            document.querySelectorAll('.currency-filter button').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent === currency) btn.classList.add('active');
+            });
+            updatePriceTable();
+        }
+
+        function updatePriceTable() {
+            const tbody = document.getElementById('priceTableBody');
+            tbody.innerHTML = '';
+
+            console.log('Updating table with base currency:', currentBaseCurrency);  // 현재 base currency 확인
+            console.log('Available price data:', priceData);  // 사용 가능한 데이터 확인
+
+            // 현재 선택된 base currency에 대한 데이터만 필터링
+            const relevantData = Object.entries(priceData).filter(([pair]) => {
+                const [, base] = pair.split('/');
+                return base === currentBaseCurrency;
+            });
+
+            console.log('Filtered data for table:', relevantData);  // 필터링된 데이터 확인
+
+            // 데이터 정렬 (알파벳 순)
+            relevantData.sort(([pairA], [pairB]) => {
+                const currencyA = pairA.split('/')[0];
+                const currencyB = pairB.split('/')[0];
+                return currencyA.localeCompare(currencyB);
+            });
+
+            relevantData.forEach(([pair, data]) => {
+                const [currency] = pair.split('/');
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${currency}</td>
+                    <td>${new Date().toLocaleTimeString()}</td>
+                    <td>${formatPrice(data.upbit)}</td>
+                    <td>${formatPrice(data.bithumb)}</td>
+                    <td>${formatPrice(data.binance)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function formatPrice(price) {
+            if (!price) return '-';
+            return price.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
 
         function connect() {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -91,9 +199,12 @@
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    addMessage('Received: ' + JSON.stringify(data, null, 2), 'info');
+                    console.log('Raw WebSocket data:', data);  // 원본 데이터 확인
+                    
+                    // 데이터 처리 (테이블 업데이트)
+                    processExchangeData(data);
                 } catch (e) {
-                    addMessage('Received: ' + event.data, 'info');
+                    console.error('Error parsing message:', e);
                 }
             };
             
@@ -111,10 +222,58 @@
             };
         }
 
+        function processExchangeData(data) {
+            try {
+                // 데이터 구조 매핑
+                const currency = data.currencyPair.symbol;         // 'BTC', 'XRP' 등
+                const base = data.currencyPair.quoteCurrency;      // 'KRW', 'USDT' 등
+                
+                // currency와 base가 유효한지 확인
+                if (!currency || !base) {
+                    console.warn('Invalid currency pair:', data.currencyPair);
+                    return;
+                }
+
+                const pair = `${currency}/${base}`;
+                
+                // 새로운 페어라면 초기화
+                if (!priceData[pair]) {
+                    priceData[pair] = {
+                        upbit: null,
+                        bithumb: null,
+                        binance: null
+                    };
+                }
+                
+                // 가격 업데이트
+                priceData[pair][data.exchange.toLowerCase()] = data.price;
+                
+                console.log('Updated price data:', {
+                    pair,
+                    exchange: data.exchange,
+                    price: data.price,
+                    allPrices: priceData[pair]
+                });
+                
+                // 현재 base currency에 맞는 데이터만 테이블 업데이트
+                if (base === currentBaseCurrency) {
+                    updatePriceTable();
+                }
+            } catch (error) {
+                console.error('Error processing data:', error);
+            }
+        }
+
         function disconnect() {
             if (ws) {
                 ws.close();
             }
+        }
+
+        function clearData() {
+            priceData = {};
+            updatePriceTable();
+            document.getElementById('messages').innerHTML = '';
         }
 
         function addMessage(message, type) {
@@ -126,9 +285,13 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        function clearMessages() {
-            document.getElementById('messages').innerHTML = '';
+        function toggleDebugMessages() {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.style.display = messagesDiv.style.display === 'none' ? 'block' : 'none';
         }
+
+        // 초기 테이블 생성
+        updatePriceTable();
     </script>
 </body>
 </html> 
