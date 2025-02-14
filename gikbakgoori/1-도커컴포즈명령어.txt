@@ -1,0 +1,8 @@
+# 로컬
+docker-compose -f docker-compose-local.yml up
+
+# 도커
+docker-compose up --build
+
+- 카프카 UI 
+http://localhost:8989/

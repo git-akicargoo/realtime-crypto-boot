@@ -51,15 +51,16 @@ app:
       connection-timeout: 5000
   kafka:
     topic:
-      trades: exchange.trades
-      leader: exchange.data    # 리더 선출용 토픽
+      trades: exchange.trades     # 거래 데이터용 토픽
+      leader: exchange.leader     # 리더 선출용 토픽
     leader:
-      partition: 0            # 리더 선출용 파티션 번호
+      partition: 0               # 리더 선출용 파티션 번호
 
 
 logging:
   level:
-    root: INFO    # 기본값은 INFO로 설정
+    root: INFO
+    org.apache.kafka: ERROR  # DEBUG로 설정하면 DEBUG, INFO, WARN, ERROR 모두 볼 수 있음
     # com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationServiceImpl: DEBUG  # 디버그 로그 유지
     # com.example.boot.exchange.layer3_data_converter.converter: DEBUG  # 컨버터는 INFO만
     # com.example.boot.web.websocket.handler.FrontendWebSocketHandler: DEBUG  # 웹소켓은 INFO만      
@@ -71,13 +72,8 @@ spring:
     activate:
       on-profile: local
   kafka:
-    enabled: true
+    enabled: true  # 로컬 테스트를 위해 활성화
     bootstrap-servers: localhost:9092
-    consumer:
-      auto-offset-reset: latest
-      properties:
-        session.timeout.ms: 10000
-        heartbeat.interval.ms: 3000
 
 ---
 # Docker Compose 환경
@@ -88,30 +84,16 @@ spring:
   kafka:
     enabled: true
     bootstrap-servers: kafka:9092
-    consumer:
-      auto-offset-reset: latest
-      properties:
-        session.timeout.ms: 10000
-        heartbeat.interval.ms: 3000
 
 ---
-# AWS 운영 환경
+# EKS 운영 환경
 spring:
   config:
     activate:
       on-profile: prod
   kafka:
     enabled: true
-    bootstrap-servers: ${KAFKA_SERVERS}
-    consumer:
-      auto-offset-reset: latest
-      properties:
-        session.timeout.ms: 10000
-        heartbeat.interval.ms: 3000
-        security.protocol: SASL_SSL
-        sasl.mechanism: AWS_MSK_IAM
-        sasl.jaas.config: ${KAFKA_JAAS_CONFIG}
-        sasl.client.callback.handler.class: software.amazon.msk.auth.iam.IAMClientCallbackHandler
+    bootstrap-servers: ${KAFKA_SERVERS}  # K8s Service DNS로 접근
 
 app:
   websocket:
