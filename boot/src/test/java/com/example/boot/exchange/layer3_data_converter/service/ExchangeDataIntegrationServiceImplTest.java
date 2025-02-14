@@ -40,7 +40,11 @@ class ExchangeDataIntegrationServiceImplTest {
         try {
             // given
             Map<String, List<CurrencyPair>> exchangePairs = new HashMap<>();
-            exchangePairs.put("binance", List.of(new CurrencyPair("USDT", "BTC")));
+            exchangePairs.put("binance", List.of(
+                new CurrencyPair("USDT", "BTC"),
+                new CurrencyPair("USDT", "ETH"),
+                new CurrencyPair("BTC", "ETH")
+            ));
             exchangePairs.put("upbit", List.of(new CurrencyPair("KRW", "BTC")));
             exchangePairs.put("bithumb", List.of(new CurrencyPair("KRW", "BTC")));
 

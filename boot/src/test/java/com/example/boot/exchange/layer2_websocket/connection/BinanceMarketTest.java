@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import com.example.boot.exchange.layer1_core.config.ExchangeConfig;
 import com.example.boot.exchange.layer1_core.model.CurrencyPair;
 import com.example.boot.exchange.layer1_core.protocol.BinanceExchangeProtocol;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -38,16 +38,13 @@ public class BinanceMarketTest {
         String exchange = "binance";
         String url = exchangeConfig.getWebsocket().getBinance();
         
-        List<String> symbols = exchangeConfig.getCommon().getSupportedSymbols();
-        List<String> currencies = exchangeConfig.getExchanges().getBinance().getSupportedCurrencies();
-        
-        List<CurrencyPair> pairs = symbols.stream()
-            .flatMap(symbol -> 
-                currencies.stream()
-                    .map(currency -> new CurrencyPair(currency, symbol))
-            )
-            .collect(Collectors.toList());
-            
+        // 테스트할 화폐쌍 직접 정의
+        List<CurrencyPair> pairs = List.of(
+            new CurrencyPair("USDT", "BTC"),  // USDT 마켓
+            new CurrencyPair("USDT", "ETH"),  // USDT 마켓
+            new CurrencyPair("BTC", "ETH")    // BTC 마켓
+        );
+
         log.info("Testing Binance markets with pairs: {}", pairs);
 
         // When & Then
@@ -61,46 +58,33 @@ public class BinanceMarketTest {
                 return handler.sendMessage(subscribeMessage)
                     .thenMany(handler.receiveMessage()
                         .doOnNext(msg -> {
-                            // 구독 응답 확인
-                            if (msg.contains("\"result\"")) {
-                                log.info("Subscription response: {}", msg);
-                                // 구독 성공 확인
-                                assertThat(msg).contains("\"result\":null");
-                            }
-                            // 거래 데이터 확인
-                            else if (msg.contains("\"e\":\"24hrTicker\"")) {
-                                JsonNode node;
-                                try {
-                                    node = new ObjectMapper().readTree(msg);
-                                    String symbol = node.get("s").asText();
-                                    String price = node.get("c").asText();      // 현재가
-                                    String high = node.get("h").asText();       // 고가
-                                    String low = node.get("l").asText();        // 저가
-                                    String priceChange = node.get("p").asText(); // 가격 변화
-                                    String priceChangePercent = node.get("P").asText(); // 변화율
-                                    String volume = node.get("v").asText();      // 거래량
-
-                                    log.info("Ticker data for {}: \n" +
-                                        "  Current Price: {} \n" +
-                                        "  24h High: {} \n" +
-                                        "  24h Low: {} \n" +
-                                        "  24h Change: {} ({} %) \n" +
-                                        "  24h Volume: {}", 
-                                        symbol, price, high, low, priceChange, priceChangePercent, volume);
-                                    
-                                    // 메시지 형식 검증
-                                    assertThat(node.has("e")).isTrue();
-                                    assertThat(node.has("s")).isTrue();
-                                    assertThat(node.has("c")).isTrue();
-                                    assertThat(node.has("h")).isTrue();
-                                    assertThat(node.has("l")).isTrue();
-                                    assertThat(node.has("p")).isTrue();
-                                    assertThat(node.has("P")).isTrue();
-                                    assertThat(node.has("v")).isTrue();
-                                } catch (Exception e) {
-                                    log.error("Error parsing message: {}", e.getMessage());
-                                    fail("Failed to parse ticker message");
+                            try {
+                                // 구독 응답 확인
+                                if (msg.contains("\"result\"")) {
+                                    log.info("Subscription response: {}", msg);
+                                    // 구독 성공 확인
+                                    assertThat(msg).contains("\"result\":null");
                                 }
+                                // 거래 데이터 확인
+                                else if (msg.contains("\"e\":\"24hrTicker\"")) {
+                                    JsonNode node = new ObjectMapper().readTree(msg);
+                                    String symbol = node.get("s").asText();
+                                    log.info("Received ticker for symbol: {}", symbol);
+                                    
+                                    // BTCUSDT, ETHUSDT, ETHBTC 중 하나인지 확인
+                                    assertThat(symbol).matches("(BTC|ETH)USDT|ETHBTC");
+                                    
+                                    // 필수 필드 존재 확인
+                                    assertThat(node.has("c")).isTrue(); // 현재가
+                                    assertThat(node.has("v")).isTrue(); // 거래량
+                                    assertThat(node.has("h")).isTrue(); // 고가
+                                    assertThat(node.has("l")).isTrue(); // 저가
+                                    assertThat(node.has("p")).isTrue(); // 가격 변화
+                                    assertThat(node.has("P")).isTrue(); // 가격 변화율
+                                }
+                            } catch (JsonProcessingException e) {
+                                log.error("JSON 파싱 에러: ", e);
+                                fail("JSON 파싱 실패: " + e.getMessage());
                             }
                         })
                         // 구독 응답 메시지를 받은 후 첫 번째 거래 메시지만 확인

@@ -34,12 +34,24 @@ public class BinanceConverterImpl implements BinanceConverter {
             // 24시간 Ticker 데이터만 처리
             if ("24hrTicker".equals(eventType)) {
                 String symbol = node.get("s").asText();
-                String[] currencies = symbol.toUpperCase().split("USDT");
-                String baseSymbol = currencies[0];  // BTC, ETH 등
+                String baseSymbol;
+                String quoteCurrency;
+
+                // BTC 마켓과 USDT 마켓 구분
+                if (symbol.endsWith("BTC")) {
+                    quoteCurrency = "BTC";
+                    baseSymbol = symbol.substring(0, symbol.length() - 3);
+                } else if (symbol.endsWith("USDT")) {
+                    quoteCurrency = "USDT";
+                    baseSymbol = symbol.substring(0, symbol.length() - 4);
+                } else {
+                    log.warn("Unsupported symbol format: {}", symbol);
+                    return null;
+                }
 
                 return StandardExchangeData.builder()
                     .exchange(EXCHANGE_NAME)
-                    .currencyPair(new CurrencyPair("USDT", baseSymbol))
+                    .currencyPair(new CurrencyPair(quoteCurrency, baseSymbol))
                     .price(new BigDecimal(node.get("c").asText()))        // closePrice
                     .volume(new BigDecimal(node.get("v").asText()))       // volume
                     .highPrice(new BigDecimal(node.get("h").asText()))    // highPrice

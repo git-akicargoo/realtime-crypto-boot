@@ -1,5 +1,6 @@
 package com.example.boot.exchange.layer3_data_converter.integration;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -38,8 +39,9 @@ class BinanceConverterIntegrationTest {
     void shouldConvertBinanceRealTimeData() throws InterruptedException {
         // given
         List<CurrencyPair> pairs = List.of(
-            new CurrencyPair("USDT", "BTC"),
-            new CurrencyPair("USDT", "ETH")
+            new CurrencyPair("USDT", "BTC"),  // USDT 마켓
+            new CurrencyPair("USDT", "ETH"),  // USDT 마켓
+            new CurrencyPair("BTC", "ETH")    // BTC 마켓
         );
 
         CountDownLatch latch = new CountDownLatch(5);
@@ -115,11 +117,24 @@ class BinanceConverterIntegrationTest {
     }
 
     private void validateConvertedData(StandardExchangeData data) {
+        log.info("Validating converted data: {}", data);
+        
         assert data.getExchange().equals("binance") : "거래소 이름이 일치하지 않습니다.";
-        assert data.getPrice() != null : "가격이 null입니다.";
-        assert data.getVolume() != null : "거래량이 null입니다.";
-        assert data.getHighPrice() != null : "고가가 null입니다.";
-        assert data.getLowPrice() != null : "저가가 null입니다.";
+        assert data.getCurrencyPair() != null : "화폐쌍이 null입니다.";
+        
+        // 지원하는 기준 화폐 검증
+        String quoteCurrency = data.getCurrencyPair().quoteCurrency();
+        assert quoteCurrency.equals("USDT") || quoteCurrency.equals("BTC") 
+            : String.format("지원하지 않는 기준 화폐입니다: %s", quoteCurrency);
+        
+        assert data.getPrice() != null && data.getPrice().compareTo(BigDecimal.ZERO) > 0 
+            : "가격이 유효하지 않습니다.";
+        assert data.getVolume() != null && data.getVolume().compareTo(BigDecimal.ZERO) >= 0 
+            : "거래량이 유효하지 않습니다.";
+        assert data.getHighPrice() != null && data.getHighPrice().compareTo(BigDecimal.ZERO) > 0 
+            : "고가가 유효하지 않습니다.";
+        assert data.getLowPrice() != null && data.getLowPrice().compareTo(BigDecimal.ZERO) > 0 
+            : "저가가 유효하지 않습니다.";
         assert data.getPriceChange() != null : "변동가가 null입니다.";
         assert data.getPriceChangePercent() != null : "변동률이 null입니다.";
         assert data.getTimestamp() != null : "타임스탬프가 null입니다.";
