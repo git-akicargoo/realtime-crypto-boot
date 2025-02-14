@@ -26,14 +26,45 @@
             margin-top: 20px;
         }
         .filter-group {
-            margin: 10px 0;
-            padding: 10px;
+            margin: 15px 0;
+            padding: 15px;
             background-color: #f8f9fa;
-            border-radius: 4px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
         }
         .filter-group button {
             margin-right: 5px;
             margin-bottom: 5px;
+            padding: 8px 16px;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #e9ecef;
+            color: #495057;
+            transition: all 0.2s ease-in-out;
+        }
+        .filter-group button:hover {
+            background-color: #dee2e6;
+            transform: translateY(-1px);
+        }
+        .filter-group button.active {
+            background-color: #0d6efd;
+            color: white;
+            border-color: #0d6efd;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .filter-group strong {
+            display: block;
+            margin-bottom: 10px;
+            color: #212529;
+            font-size: 1.1em;
+        }
+        .filter-group button:disabled {
+            background-color: #e9ecef;
+            color: #adb5bd;
+            cursor: not-allowed;
+            opacity: 0.7;
         }
         .messages {
             height: 300px;
@@ -67,31 +98,91 @@
         button:disabled {
             background-color: #ccc;
         }
+        #messageCount {
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        
+        .controls p {
+            margin: 5px 0;
+            display: inline-block;
+            margin-right: 20px;
+        }
+        .stats-panel {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .stats-group {
+            margin: 10px 0;
+        }
+
+        .stats-group strong {
+            display: block;
+            margin-bottom: 5px;
+            color: #495057;
+        }
+
+        .stats-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .stat-item {
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .stat-item .count {
+            font-weight: bold;
+            color: #0d6efd;
+        }
+
+        #messagesPerSecond {
+            color: #198754;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>Exchange Monitor</h2>
         <div class="controls">
-            <p>Status: <span id="status">Disconnected</span></p>
-            <button onclick="connect()" id="connectBtn">Connect</button>
-            <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
-            <button onclick="clearData()">Clear Data</button>
+            <div class="stats-panel">
+                <p>Status: <span id="status">Disconnected</span></p>
+                <p>Total Messages: <span id="messageCount">0</span></p>
+                <p>Messages/sec: <span id="messagesPerSecond">0</span></p>
+                <div id="exchangeStats" class="stats-group">
+                    <strong>Exchange Stats:</strong>
+                    <div class="stats-content"></div>
+                </div>
+                <div id="marketStats" class="stats-group">
+                    <strong>Market Stats:</strong>
+                    <div class="stats-content"></div>
+                </div>
+            </div>
+            <div class="button-group">
+                <button onclick="connect()" id="connectBtn">Connect</button>
+                <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
+                <button onclick="clearData()">Clear Data</button>
+            </div>
         </div>
 
         <div class="debug-panel">
             <h3>Debug Messages</h3>
             <div class="filter-group" id="exchangeFilters">
                 <strong>Exchanges:</strong>
-                <!-- 동적으로 거래소 필터 버튼이 추가됨 -->
             </div>
             <div class="filter-group" id="marketFilters">
                 <strong>Markets:</strong>
-                <!-- 동적으로 마켓 필터 버튼이 추가됨 -->
             </div>
             <div class="filter-group" id="currencyFilters">
                 <strong>Currencies:</strong>
-                <!-- 동적으로 코인 필터 버튼이 추가됨 -->
             </div>
             <div class="messages" id="messages"></div>
         </div>
@@ -107,12 +198,19 @@
             market: new Set(),
             currency: new Set()
         };
-
-        // 모든 메시지를 저장할 배열 추가
         let storedMessages = [];
-
         let currentExchange = null;
         let currentMarket = null;
+        const MAX_MESSAGES = 1000; // 최대 메시지 수
+        const MAX_DISPLAYED_MESSAGES = 200; // 화면에 표시할 최대 메시지 수
+        let messageCounter = 0;
+        let messagesLastSecond = 0;
+        let exchangeStats = {};
+        let marketStats = {};
+
+        // 정렬 순서 상수 정의
+        const EXCHANGE_ORDER = ['upbit', 'bithumb', 'binance'];
+        const MARKET_ORDER = ['KRW', 'BTC', 'USDT'];
 
         function connect() {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -132,7 +230,7 @@
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    processMessage(data);
+                    handleMessage(data);
                 } catch (e) {
                     console.error('Error parsing message:', e);
                 }
@@ -147,73 +245,156 @@
             };
         }
 
-        function processMessage(data) {
-            const exchange = data.exchange;
-            let market;
-            let currency;
+        function handleMessage(data) {
+            try {
+                const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+                
+                if (storedMessages.length >= MAX_MESSAGES) {
+                    // 메시지 절반으로 줄이기
+                    storedMessages = storedMessages.slice(-Math.floor(MAX_MESSAGES / 2));
+                    
+                    // 통계 재계산
+                    exchangeStats = {};
+                    marketStats = {};
+                    
+                    // 남은 메시지들로 통계 다시 계산
+                    storedMessages.forEach(msg => {
+                        const exchange = msg.exchange;
+                        const market = msg.currencyPair.quoteCurrency;
+                        const marketKey = `${exchange}-${market}`;
+                        
+                        exchangeStats[exchange] = (exchangeStats[exchange] || 0) + 1;
+                        marketStats[marketKey] = (marketStats[marketKey] || 0) + 1;
+                    });
+                }
+                
+                storedMessages.push(parsedData);
+                messageCounter = storedMessages.length;
+                updateStats(parsedData);
+                updateMessageCount();
+                
+                const exchange = parsedData.exchange;
+                const market = parsedData.currencyPair.quoteCurrency;
+                const currency = parsedData.currencyPair.symbol;
 
-            // symbol이 BTC로 끝나는 경우 BTC 마켓으로 처리
-            if (data.currencyPair.symbol.endsWith('BTC')) {
-                market = 'BTC';
-                currency = data.currencyPair.symbol.slice(0, -3); // 'DOGEBTC' -> 'DOGE'
-            } else {
-                market = data.currencyPair.quoteCurrency;
-                currency = data.currencyPair.symbol;
-            }
-
-            // 첫 단계에서는 거래소만 추가
-            exchanges.add(exchange);
-            
-            // 거래소가 선택된 경우에만 해당 거래소의 마켓 추가
-            if (currentExchange === exchange) {
-                markets.add(market);
-            }
-            
-            // 거래소와 마켓이 선택된 경우에만 해당 코인 추가
-            if (currentExchange === exchange && currentMarket === market) {
-                currencies.add(currency);
-            }
-
-            // 필터 버튼 업데이트
-            updateFilterButtons();
-
-            // 메시지 저장 (처리된 마켓과 코인 정보도 함께 저장)
-            storedMessages.push({
-                ...data,
-                processedMarket: market,
-                processedCurrency: currency
-            });
-
-            // 필터링 적용
-            if (shouldShowMessage(exchange, market, currency)) {
-                addMessage(JSON.stringify(data, null, 2), 'data');
+                exchanges.add(exchange);
+                
+                if (currentExchange === exchange) {
+                    markets.add(market);
+                    
+                    if (currentMarket === market) {
+                        currencies.add(currency);
+                    }
+                }
+                
+                if (shouldShowMessage(exchange, market, currency)) {
+                    addMessage(JSON.stringify(parsedData, null, 2), 'data');
+                    
+                    // 화면에 표시된 메시지 수 제한
+                    const messagesDiv = document.getElementById('messages');
+                    const messageElements = messagesDiv.getElementsByClassName('message');
+                    if (messageElements.length > MAX_DISPLAYED_MESSAGES) {
+                        // 가장 오래된 메시지들 제거
+                        const removeCount = messageElements.length - MAX_DISPLAYED_MESSAGES;
+                        for (let i = 0; i < removeCount; i++) {
+                            messagesDiv.removeChild(messageElements[0]);
+                        }
+                    }
+                }
+                
+                updateFilterButtons();
+            } catch (e) {
+                console.error('Error handling message:', e);
+                addMessage('Error: ' + e.message, 'error');
             }
         }
 
         function shouldShowMessage(exchange, market, currency) {
-            // 거래소 필터 체크
-            if (activeFilters.exchange.size > 0 && !activeFilters.exchange.has(exchange)) {
-                return false;
-            }
+            return (activeFilters.exchange.size === 0 || activeFilters.exchange.has(exchange)) &&
+                   (activeFilters.market.size === 0 || activeFilters.market.has(market)) &&
+                   (activeFilters.currency.size === 0 || activeFilters.currency.has(currency));
+        }
+
+        function handleFilterClick(type, value, button) {
+            clearData();
             
-            // 마켓 필터 체크
-            if (activeFilters.market.size > 0 && !activeFilters.market.has(market)) {
-                return false;
-            }
+            document.querySelectorAll(`#${type}Filters button`).forEach(btn => {
+                btn.classList.remove('active');
+            });
             
-            // 코인 필터 체크
-            if (activeFilters.currency.size > 0 && !activeFilters.currency.has(currency)) {
-                return false;
+            if (activeFilters[type].has(value)) {
+                activeFilters[type].delete(value);
+                button.classList.remove('active');
+                
+                if (type === 'exchange') {
+                    currentExchange = null;
+                    currentMarket = null;
+                    markets = new Set();
+                    currencies = new Set();
+                    activeFilters.market.clear();
+                    activeFilters.currency.clear();
+                    document.getElementById('marketFilters').innerHTML = '<strong>Markets:</strong>';
+                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
+                } else if (type === 'market') {
+                    currentMarket = null;
+                    currencies = new Set();
+                    activeFilters.currency.clear();
+                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
+                }
+            } else {
+                if (type === 'exchange') {
+                    currentExchange = value;
+                    currentMarket = null;
+                    markets = new Set();
+                    currencies = new Set();
+                    activeFilters.market.clear();
+                    activeFilters.currency.clear();
+                    document.getElementById('marketFilters').innerHTML = '<strong>Markets:</strong>';
+                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
+                } else if (type === 'market') {
+                    currentMarket = value;
+                    currencies = new Set();
+                    activeFilters.currency.clear();
+                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
+                }
+                
+                activeFilters[type].clear();
+                activeFilters[type].add(value);
+                button.classList.add('active');
             }
-            
-            return true;
+
+            storedMessages.forEach(data => {
+                if (shouldShowMessage(
+                    data.exchange,
+                    data.currencyPair.quoteCurrency,
+                    data.currencyPair.symbol
+                )) {
+                    addMessage(JSON.stringify(data, null, 2), 'data');
+                }
+            });
+
+            updateAvailableFilters();
+        }
+
+        function updateAvailableFilters() {
+            storedMessages.forEach(data => {
+                exchanges.add(data.exchange);
+                
+                if (currentExchange === data.exchange) {
+                    markets.add(data.currencyPair.quoteCurrency);
+                    
+                    if (currentMarket === data.currencyPair.quoteCurrency) {
+                        currencies.add(data.currencyPair.symbol);
+                    }
+                }
+            });
+
+            updateFilterButtons();
         }
 
         function updateFilterButtons() {
-            // 거래소 필터는 항상 표시
             updateFilterGroup('exchangeFilters', exchanges, 'exchange');
             
-            // 마켓 필터는 거래소가 선택된 경우에만 표시
             if (currentExchange) {
                 document.getElementById('marketFilters').style.display = 'block';
                 updateFilterGroup('marketFilters', markets, 'market');
@@ -222,7 +403,6 @@
                 markets.clear();
             }
             
-            // 코인 필터는 거래소와 마켓이 선택된 경우에만 표시
             if (currentExchange && currentMarket) {
                 document.getElementById('currencyFilters').style.display = 'block';
                 updateFilterGroup('currencyFilters', currencies, 'currency');
@@ -237,101 +417,14 @@
             const buttons = container.getElementsByTagName('button');
             const currentButtons = new Set([...buttons].map(b => b.textContent));
 
-            // 새로운 아이템에 대한 버튼 추가
             items.forEach(item => {
                 if (!currentButtons.has(item)) {
                     const button = document.createElement('button');
                     button.textContent = item;
-                    button.onclick = () => toggleFilter(filterType, item, button);
+                    button.onclick = () => handleFilterClick(filterType, item, button);
                     container.appendChild(button);
                 }
             });
-        }
-
-        function toggleFilter(type, value, button) {
-            // 메시지창 초기화
-            document.getElementById('messages').innerHTML = '';
-            
-            if (activeFilters[type].has(value)) {
-                activeFilters[type].delete(value);
-                button.classList.remove('active');
-                
-                if (type === 'exchange') {
-                    currentExchange = null;
-                    currentMarket = null;
-                    markets.clear();
-                    currencies.clear();
-                    activeFilters.market.clear();
-                    activeFilters.currency.clear();
-                    // 마켓과 코인 필터 버튼들 제거
-                    document.getElementById('marketFilters').innerHTML = '<strong>Markets:</strong>';
-                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
-                } else if (type === 'market') {
-                    currentMarket = null;
-                    currencies.clear();
-                    activeFilters.currency.clear();
-                    // 코인 필터 버튼들 제거
-                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
-                }
-            } else {
-                if (type === 'exchange') {
-                    // 거래소 변경 시 모든 하위 필터 초기화
-                    currentExchange = value;
-                    currentMarket = null;
-                    markets.clear();
-                    currencies.clear();
-                    activeFilters.market.clear();
-                    activeFilters.currency.clear();
-                    // 마켓과 코인 필터 버튼들 제거
-                    document.getElementById('marketFilters').innerHTML = '<strong>Markets:</strong>';
-                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
-                    
-                    // 현재 거래소의 마켓 데이터만 다시 수집
-                    storedMessages.forEach(data => {
-                        if (data.exchange === value) {
-                            markets.add(data.currencyPair.quoteCurrency);
-                        }
-                    });
-                } else if (type === 'market') {
-                    currentMarket = value;
-                    currencies.clear();
-                    activeFilters.currency.clear();
-                    // 코인 필터 버튼들 제거
-                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
-                    
-                    // 현재 거래소와 마켓의 코인 데이터만 다시 수집
-                    storedMessages.forEach(data => {
-                        if (data.exchange === currentExchange && 
-                            data.currencyPair.quoteCurrency === value) {
-                            currencies.add(data.currencyPair.symbol);
-                        }
-                    });
-                }
-
-                // 이전 필터 해제
-                activeFilters[type].clear();
-                document.querySelectorAll(`#${type}Filters button`).forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                
-                // 새 필터 설정
-                activeFilters[type].add(value);
-                button.classList.add('active');
-            }
-
-            // 필터 버튼 업데이트
-            updateFilterButtons();
-
-            // 저장된 메시지 재필터링
-            storedMessages.forEach(data => {
-                if (shouldShowMessage(data.exchange, data.currencyPair.quoteCurrency, data.currencyPair.symbol)) {
-                    addMessage(JSON.stringify(data, null, 2), 'data');
-                }
-            });
-        }
-
-        function getAllStoredMessages() {
-            return storedMessages;
         }
 
         function addMessage(message, type) {
@@ -339,8 +432,16 @@
             const messageElement = document.createElement('div');
             messageElement.className = `message ${type}`;
             messageElement.textContent = message;
+            
+            // 스크롤이 맨 아래에 있는지 확인
+            const isScrolledToBottom = messagesDiv.scrollHeight - messagesDiv.clientHeight <= messagesDiv.scrollTop + 1;
+            
             messagesDiv.appendChild(messageElement);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            // 스크롤이 맨 아래에 있었을 때만 자동 스크롤
+            if (isScrolledToBottom) {
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
         }
 
         function disconnect() {
@@ -350,17 +451,19 @@
         }
 
         function clearData() {
-            // 메시지 창만 클리어
             document.getElementById('messages').innerHTML = '';
-            
-            // 저장된 메시지도 클리어
             storedMessages = [];
+            messageCounter = 0;
+            messagesLastSecond = 0;
+            exchangeStats = {};
+            marketStats = {};
+            updateMessageCount();
             
-            // 필터는 유지하고 버튼의 active 상태도 유지
-            // activeFilters는 초기화하지 않음
+            // 통계 패널 초기화
+            document.querySelector('#exchangeStats .stats-content').innerHTML = '';
+            document.querySelector('#marketStats .stats-content').innerHTML = '';
         }
 
-        // 전체 초기화를 위한 새로운 함수 추가
         function resetAll() {
             document.getElementById('messages').innerHTML = '';
             currentExchange = null;
@@ -379,6 +482,71 @@
             
             updateFilterButtons();
         }
+
+        // 메시지 카운터 업데이트 함수
+        function updateMessageCount() {
+            document.getElementById('messageCount').textContent = storedMessages.length;
+        }
+
+        function updateStats(data) {
+            // 거래소 통계 업데이트
+            const exchange = data.exchange;
+            exchangeStats[exchange] = (exchangeStats[exchange] || 0) + 1;
+            
+            // 마켓 통계 업데이트
+            const market = data.currencyPair.quoteCurrency;
+            const marketKey = `${exchange}-${market}`;
+            marketStats[marketKey] = (marketStats[marketKey] || 0) + 1;
+            
+            // 초당 메시지 수 계산
+            messagesLastSecond++;
+        }
+
+        // 1초마다 통계 업데이트
+        setInterval(() => {
+            // 초당 메시지 수 업데이트
+            document.getElementById('messagesPerSecond').textContent = messagesLastSecond;
+            messagesLastSecond = 0;
+            
+            // 거래소 통계 표시 (지정된 순서로 정렬)
+            const exchangeStatsContent = document.querySelector('#exchangeStats .stats-content');
+            exchangeStatsContent.innerHTML = Object.entries(exchangeStats)
+                .sort((a, b) => {
+                    const orderA = EXCHANGE_ORDER.indexOf(a[0]);
+                    const orderB = EXCHANGE_ORDER.indexOf(b[0]);
+                    return orderA - orderB;
+                })
+                .map(([exchange, count]) => `
+                    <div class="stat-item">
+                        ${exchange}: <span class="count">${count}</span>
+                    </div>
+                `).join('');
+            
+            // 마켓 통계 표시 (거래소 순서 및 마켓 순서로 정렬)
+            const marketStatsContent = document.querySelector('#marketStats .stats-content');
+            marketStatsContent.innerHTML = Object.entries(marketStats)
+                .sort((a, b) => {
+                    const [exchangeA, marketA] = a[0].split('-');
+                    const [exchangeB, marketB] = b[0].split('-');
+                    
+                    // 먼저 거래소 순서로 정렬
+                    const exchangeOrderA = EXCHANGE_ORDER.indexOf(exchangeA);
+                    const exchangeOrderB = EXCHANGE_ORDER.indexOf(exchangeB);
+                    if (exchangeOrderA !== exchangeOrderB) {
+                        return exchangeOrderA - exchangeOrderB;
+                    }
+                    
+                    // 같은 거래소면 마켓 순서로 정렬
+                    const marketOrderA = MARKET_ORDER.indexOf(marketA);
+                    const marketOrderB = MARKET_ORDER.indexOf(marketB);
+                    return marketOrderA - marketOrderB;
+                })
+                .map(([marketKey, count]) => `
+                    <div class="stat-item">
+                        ${marketKey}: <span class="count">${count}</span>
+                    </div>
+                `).join('');
+        }, 1000);
     </script>
 </body>
 </html> 
