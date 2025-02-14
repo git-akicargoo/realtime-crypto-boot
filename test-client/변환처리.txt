@@ -1,0 +1,13 @@
+정리
+1. KRW 탭:
+업비트: 원본 KRW 데이터
+빗썸: 원본 KRW 데이터
+바이낸스: USDT → KRW 변환
+USDT 탭:
+업비트: 표시 안됨
+빗썸: KRW → USDT 변환
+바이낸스: 원본 USDT 데이터
+3. BTC 탭:
+업비트: KRW → BTC 변환
+빗썸: KRW → BTC 변환
+바이낸스: 원본 BTC 데이터

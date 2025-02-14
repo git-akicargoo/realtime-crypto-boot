@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Exchange Monitor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .debug-panel {
+            margin-top: 20px;
+        }
+        .filter-group {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .filter-group button {
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            background-color: white;
+        }
+        .message {
+            padding: 5px;
+            margin: 2px 0;
+            border-bottom: 1px solid #eee;
+            font-family: monospace;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+        }
+        button.active {
+            background-color: #0056b3;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Exchange Monitor</h2>
+        <div class="controls">
+            <p>Status: <span id="status">Disconnected</span></p>
+            <button onclick="connect()" id="connectBtn">Connect</button>
+            <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
+            <button onclick="clearData()">Clear Data</button>
+        </div>
+
+        <div class="debug-panel">
+            <h3>Debug Messages</h3>
+            <div class="filter-group" id="exchangeFilters">
+                <strong>Exchanges:</strong>
+                <!-- 동적으로 거래소 필터 버튼이 추가됨 -->
+            </div>
+            <div class="filter-group" id="marketFilters">
+                <strong>Markets:</strong>
+                <!-- 동적으로 마켓 필터 버튼이 추가됨 -->
+            </div>
+            <div class="filter-group" id="currencyFilters">
+                <strong>Currencies:</strong>
+                <!-- 동적으로 코인 필터 버튼이 추가됨 -->
+            </div>
+            <div class="messages" id="messages"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let exchanges = new Set();
+        let markets = new Set();
+        let currencies = new Set();
+        let activeFilters = {
+            exchange: new Set(),
+            market: new Set(),
+            currency: new Set()
+        };
+
+        // 모든 메시지를 저장할 배열 추가
+        let storedMessages = [];
+
+        let currentExchange = null;
+        let currentMarket = null;
+
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                addMessage('Already connected', 'info');
+                return;
+            }
+
+            ws = new WebSocket('ws://localhost:8080/ws/exchange');
+            
+            ws.onopen = () => {
+                document.getElementById('status').textContent = 'Connected';
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                addMessage('Connected to WebSocket', 'system');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    processMessage(data);
+                } catch (e) {
+                    console.error('Error parsing message:', e);
+                }
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('status').textContent = 'Disconnected';
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                addMessage('Disconnected from WebSocket', 'system');
+                ws = null;
+            };
+        }
+
+        function processMessage(data) {
+            const exchange = data.exchange;
+            let market;
+            let currency;
+
+            // symbol이 BTC로 끝나는 경우 BTC 마켓으로 처리
+            if (data.currencyPair.symbol.endsWith('BTC')) {
+                market = 'BTC';
+                currency = data.currencyPair.symbol.slice(0, -3); // 'DOGEBTC' -> 'DOGE'
+            } else {
+                market = data.currencyPair.quoteCurrency;
+                currency = data.currencyPair.symbol;
+            }
+
+            // 첫 단계에서는 거래소만 추가
+            exchanges.add(exchange);
+            
+            // 거래소가 선택된 경우에만 해당 거래소의 마켓 추가
+            if (currentExchange === exchange) {
+                markets.add(market);
+            }
+            
+            // 거래소와 마켓이 선택된 경우에만 해당 코인 추가
+            if (currentExchange === exchange && currentMarket === market) {
+                currencies.add(currency);
+            }
+
+            // 필터 버튼 업데이트
+            updateFilterButtons();
+
+            // 메시지 저장 (처리된 마켓과 코인 정보도 함께 저장)
+            storedMessages.push({
+                ...data,
+                processedMarket: market,
+                processedCurrency: currency
+            });
+
+            // 필터링 적용
+            if (shouldShowMessage(exchange, market, currency)) {
+                addMessage(JSON.stringify(data, null, 2), 'data');
+            }
+        }
+
+        function shouldShowMessage(exchange, market, currency) {
+            // 거래소 필터 체크
+            if (activeFilters.exchange.size > 0 && !activeFilters.exchange.has(exchange)) {
+                return false;
+            }
+            
+            // 마켓 필터 체크
+            if (activeFilters.market.size > 0 && !activeFilters.market.has(market)) {
+                return false;
+            }
+            
+            // 코인 필터 체크
+            if (activeFilters.currency.size > 0 && !activeFilters.currency.has(currency)) {
+                return false;
+            }
+            
+            return true;
+        }
+
+        function updateFilterButtons() {
+            // 거래소 필터는 항상 표시
+            updateFilterGroup('exchangeFilters', exchanges, 'exchange');
+            
+            // 마켓 필터는 거래소가 선택된 경우에만 표시
+            if (currentExchange) {
+                document.getElementById('marketFilters').style.display = 'block';
+                updateFilterGroup('marketFilters', markets, 'market');
+            } else {
+                document.getElementById('marketFilters').style.display = 'none';
+                markets.clear();
+            }
+            
+            // 코인 필터는 거래소와 마켓이 선택된 경우에만 표시
+            if (currentExchange && currentMarket) {
+                document.getElementById('currencyFilters').style.display = 'block';
+                updateFilterGroup('currencyFilters', currencies, 'currency');
+            } else {
+                document.getElementById('currencyFilters').style.display = 'none';
+                currencies.clear();
+            }
+        }
+
+        function updateFilterGroup(elementId, items, filterType) {
+            const container = document.getElementById(elementId);
+            const buttons = container.getElementsByTagName('button');
+            const currentButtons = new Set([...buttons].map(b => b.textContent));
+
+            // 새로운 아이템에 대한 버튼 추가
+            items.forEach(item => {
+                if (!currentButtons.has(item)) {
+                    const button = document.createElement('button');
+                    button.textContent = item;
+                    button.onclick = () => toggleFilter(filterType, item, button);
+                    container.appendChild(button);
+                }
+            });
+        }
+
+        function toggleFilter(type, value, button) {
+            // 메시지창 초기화
+            document.getElementById('messages').innerHTML = '';
+            
+            if (activeFilters[type].has(value)) {
+                activeFilters[type].delete(value);
+                button.classList.remove('active');
+                
+                if (type === 'exchange') {
+                    currentExchange = null;
+                    currentMarket = null;
+                    markets.clear();
+                    currencies.clear();
+                    activeFilters.market.clear();
+                    activeFilters.currency.clear();
+                    // 마켓과 코인 필터 버튼들 제거
+                    document.getElementById('marketFilters').innerHTML = '<strong>Markets:</strong>';
+                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
+                } else if (type === 'market') {
+                    currentMarket = null;
+                    currencies.clear();
+                    activeFilters.currency.clear();
+                    // 코인 필터 버튼들 제거
+                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
+                }
+            } else {
+                if (type === 'exchange') {
+                    // 거래소 변경 시 모든 하위 필터 초기화
+                    currentExchange = value;
+                    currentMarket = null;
+                    markets.clear();
+                    currencies.clear();
+                    activeFilters.market.clear();
+                    activeFilters.currency.clear();
+                    // 마켓과 코인 필터 버튼들 제거
+                    document.getElementById('marketFilters').innerHTML = '<strong>Markets:</strong>';
+                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
+                    
+                    // 현재 거래소의 마켓 데이터만 다시 수집
+                    storedMessages.forEach(data => {
+                        if (data.exchange === value) {
+                            markets.add(data.currencyPair.quoteCurrency);
+                        }
+                    });
+                } else if (type === 'market') {
+                    currentMarket = value;
+                    currencies.clear();
+                    activeFilters.currency.clear();
+                    // 코인 필터 버튼들 제거
+                    document.getElementById('currencyFilters').innerHTML = '<strong>Currencies:</strong>';
+                    
+                    // 현재 거래소와 마켓의 코인 데이터만 다시 수집
+                    storedMessages.forEach(data => {
+                        if (data.exchange === currentExchange && 
+                            data.currencyPair.quoteCurrency === value) {
+                            currencies.add(data.currencyPair.symbol);
+                        }
+                    });
+                }
+
+                // 이전 필터 해제
+                activeFilters[type].clear();
+                document.querySelectorAll(`#${type}Filters button`).forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                // 새 필터 설정
+                activeFilters[type].add(value);
+                button.classList.add('active');
+            }
+
+            // 필터 버튼 업데이트
+            updateFilterButtons();
+
+            // 저장된 메시지 재필터링
+            storedMessages.forEach(data => {
+                if (shouldShowMessage(data.exchange, data.currencyPair.quoteCurrency, data.currencyPair.symbol)) {
+                    addMessage(JSON.stringify(data, null, 2), 'data');
+                }
+            });
+        }
+
+        function getAllStoredMessages() {
+            return storedMessages;
+        }
+
+        function addMessage(message, type) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${type}`;
+            messageElement.textContent = message;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function clearData() {
+            // 메시지 창만 클리어
+            document.getElementById('messages').innerHTML = '';
+            
+            // 저장된 메시지도 클리어
+            storedMessages = [];
+            
+            // 필터는 유지하고 버튼의 active 상태도 유지
+            // activeFilters는 초기화하지 않음
+        }
+
+        // 전체 초기화를 위한 새로운 함수 추가
+        function resetAll() {
+            document.getElementById('messages').innerHTML = '';
+            currentExchange = null;
+            currentMarket = null;
+            exchanges.clear();
+            markets.clear();
+            currencies.clear();
+            activeFilters.exchange.clear();
+            activeFilters.market.clear();
+            activeFilters.currency.clear();
+            storedMessages = [];
+            
+            document.querySelectorAll('.filter-group button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            updateFilterButtons();
+        }
+    </script>
+</body>
+</html> 

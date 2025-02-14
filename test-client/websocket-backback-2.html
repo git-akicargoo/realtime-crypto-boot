@@ -137,11 +137,8 @@
             const relevantData = Object.entries(priceData)
                 .filter(([pair]) => {
                     const [currency, base] = pair.split('/');
-                    // BTC는 표시하되, ETHBTC와 같은 형태의 페어만 제외
-                    if (currency.endsWith('BTC') && currency !== 'BTC') {
-                        return false;
-                    }
-                    return base === currentBaseCurrency;
+                    // BTC로 끝나는 심볼은 제외하고, 현재 선택된 base currency와 일치하는 것만 표시
+                    return base === currentBaseCurrency && !currency.endsWith('BTC');
                 })
                 .sort();
 
@@ -163,15 +160,16 @@
         function formatPrice(price) {
             if (!price) return '-';
             
-            // BTC 마켓일 경우 더 많은 소수점 자리 표시
+            // BTC 기준일 때는 더 많은 소수점 자리를 표시
             if (currentBaseCurrency === 'BTC') {
-                return price.toLocaleString(undefined, {
-                    minimumFractionDigits: 8,
-                    maximumFractionDigits: 8
-                });
+                if (price === 1) {
+                    return '1.00000000';  // BTC/BTC의 경우
+                }
+                // 작은 숫자를 위해 8자리까지 표시
+                return price.toFixed(8);
             }
             
-            // 다른 마켓은 기존대로 표시
+            // KRW나 USDT의 경우 기존 방식대로
             return price.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
@@ -225,97 +223,59 @@
                 let pair;
                 let price = data.price;
 
-                // 바이낸스 데이터 처리
-                if (data.exchange.toLowerCase() === 'binance') {
-                    // BTC 마켓 처리
-                    if (base === 'BTC' || currency.endsWith('BTC')) {
-                        // ETHBTC -> ETH/BTC 형태로 변환
-                        const actualCurrency = currency.endsWith('BTC') ? 
-                            currency.substring(0, currency.length - 3) : currency;
-                        
-                        // BTC/BTC는 1로 처리
-                        if (actualCurrency === 'BTC') {
-                            pair = 'BTC/BTC';
-                            price = 1;
-                        } else {
-                            pair = `${actualCurrency}/BTC`;
-                        }
-                    } 
-                    // USDT 마켓 처리
-                    else if (base === 'USDT') {
-                        pair = `${currency}/USDT`;
-                        
-                        // KRW 탭을 위한 변환
-                        if (currentBaseCurrency === 'KRW') {
-                            const btcKrwPrice = priceData['BTC/KRW']?.['upbit'];
-                            const btcUsdtPrice = priceData['BTC/USDT']?.['binance'];
-                            
-                            if (btcKrwPrice && btcUsdtPrice) {
-                                const usdtKrwRate = btcKrwPrice / btcUsdtPrice;
-                                const krwPrice = price * usdtKrwRate;
-                                const krwPair = `${currency}/KRW`;
-                                if (!priceData[krwPair]) {
-                                    priceData[krwPair] = {
-                                        upbit: null,
-                                        bithumb: null,
-                                        binance: null
-                                    };
-                                }
-                                priceData[krwPair].binance = krwPrice;
-                            }
-                        }
-                    }
-                } else {
-                    // 업비트, 빗썸 데이터 처리
-                    pair = `${currency}/${base}`;
-                    
-                    // BTC/BTC는 1로 처리
-                    if (currentBaseCurrency === 'BTC' && currency === 'BTC') {
-                        const btcPair = 'BTC/BTC';
-                        if (!priceData[btcPair]) {
-                            priceData[btcPair] = {
-                                upbit: 1,
-                                bithumb: 1,
-                                binance: 1
-                            };
-                        }
-                    }
-                    // BTC 탭을 위한 KRW -> BTC 변환
-                    else if (base === 'KRW' && currentBaseCurrency === 'BTC') {
-                        const btcPrice = priceData['BTC/KRW']?.['upbit'];
-                        if (btcPrice) {
-                            const btcValue = price / btcPrice;
-                            const btcPair = `${currency}/BTC`;
-                            if (!priceData[btcPair]) {
-                                priceData[btcPair] = {
-                                    upbit: null,
-                                    bithumb: null,
-                                    binance: null
-                                };
-                            }
-                            priceData[btcPair][data.exchange.toLowerCase()] = btcValue;
-                        }
-                    }
-                    
-                    // USDT 탭을 위한 빗썸 KRW -> USDT 변환
-                    if (data.exchange.toLowerCase() === 'bithumb' && 
-                        base === 'KRW' && currentBaseCurrency === 'USDT') {
+                if (data.exchange.toLowerCase() === 'bithumb' && currentBaseCurrency !== 'KRW') {
+                    // 빗썸 KRW -> USDT/BTC 변환
+                    if (currentBaseCurrency === 'USDT') {
                         const btcKrwPrice = priceData['BTC/KRW']?.['bithumb'];
                         const btcUsdtPrice = priceData['BTC/USDT']?.['binance'];
                         
                         if (btcKrwPrice && btcUsdtPrice) {
                             const krwUsdtRate = btcUsdtPrice / btcKrwPrice;
-                            const usdtPrice = price * krwUsdtRate;
-                            const usdtPair = `${currency}/USDT`;
-                            if (!priceData[usdtPair]) {
-                                priceData[usdtPair] = {
-                                    upbit: null,
-                                    bithumb: null,
-                                    binance: null
-                                };
-                            }
-                            priceData[usdtPair].bithumb = usdtPrice;
+                            price = price * krwUsdtRate;
+                            pair = `${currency}/USDT`;
+                        } else {
+                            pair = `${currency}/${base}`;
                         }
+                    } else if (currentBaseCurrency === 'BTC') {
+                        const btcPrice = priceData['BTC/KRW']?.['bithumb'];
+                        if (btcPrice) {
+                            price = price / btcPrice;
+                            pair = `${currency}/BTC`;
+                        } else {
+                            pair = `${currency}/${base}`;
+                        }
+                    }
+                } else if (data.exchange.toLowerCase() === 'binance' && currentBaseCurrency === 'KRW') {
+                    // 바이낸스 USDT -> KRW 변환
+                    if (base === 'USDT') {
+                        const btcKrwPrice = priceData['BTC/KRW']?.['upbit'];
+                        const btcUsdtPrice = priceData['BTC/USDT']?.['binance'];
+                        
+                        if (btcKrwPrice && btcUsdtPrice) {
+                            const usdtKrwRate = btcKrwPrice / btcUsdtPrice;
+                            price = price * usdtKrwRate;
+                            pair = `${currency}/KRW`;
+                        } else {
+                            pair = `${currency}/${base}`;
+                        }
+                    } else {
+                        pair = `${currency}/${base}`;
+                    }
+                } else {
+                    // 다른 경우는 기존 로직대로 처리
+                    if (currency === 'BTC') {
+                        if (currentBaseCurrency === 'BTC') {
+                            pair = 'BTC/BTC';
+                            price = 1.0;
+                        } else {
+                            pair = `${currency}/${base}`;
+                        }
+                    } else if (currency.endsWith('BTC')) {
+                        pair = `${currency.replace('BTC', '')}/BTC`;
+                    } else if (base === 'BTC') {
+                        pair = `${currency}/BTC`;
+                    } else {
+                        pair = `${currency}/${base}`;
                     }
                 }
 
@@ -328,7 +288,6 @@
                     };
                 }
 
-                // 원본 데이터 저장
                 priceData[pair][data.exchange.toLowerCase()] = price;
                 
                 // 디버그 메시지 추가
