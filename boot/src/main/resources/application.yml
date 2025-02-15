@@ -56,14 +56,17 @@ app:
     leader:
       partition: 0               # 리더 선출용 파티션 번호
 
-
 logging:
   level:
-    root: INFO
-    org.apache.kafka: ERROR  # DEBUG로 설정하면 DEBUG, INFO, WARN, ERROR 모두 볼 수 있음
-    # com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationServiceImpl: DEBUG  # 디버그 로그 유지
-    # com.example.boot.exchange.layer3_data_converter.converter: DEBUG  # 컨버터는 INFO만
-    # com.example.boot.web.websocket.handler.FrontendWebSocketHandler: DEBUG  # 웹소켓은 INFO만      
+    root: ${LOG_LEVEL:INFO}  # 기본값은 INFO, 환경변수로 오버라이드 가능
+    org.apache.kafka: ERROR
+    org.apache.zookeeper: ERROR    # Zookeeper 로그
+    org.apache.curator: ERROR      # Curator 로그
+    com.example.boot.exchange: DEBUG           # 거래소 관련 패키지
+    com.example.boot.web.websocket: DEBUG      # 웹소켓 관련 패키지
+    com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationServiceImpl: DEBUG
+    com.example.boot.exchange.layer3_data_converter.converter: DEBUG
+    com.example.boot.web.websocket.handler.FrontendWebSocketHandler: DEBUG
 
 ---
 # 로컬 개발 환경
@@ -75,6 +78,9 @@ spring:
     enabled: true  # 로컬 테스트를 위해 활성화
     bootstrap-servers: localhost:9092
 
+zookeeper:
+  connect-string: localhost:2181  # 로컬 환경용 Zookeeper 주소
+
 ---
 # Docker Compose 환경
 spring:
@@ -84,6 +90,15 @@ spring:
   kafka:
     enabled: true
     bootstrap-servers: kafka:9092
+    consumer:
+      group-id: exchange-group
+
+zookeeper:
+  connect-string: zookeeper:2181  # 도커 환경용 Zookeeper 주소
+
+app:
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:*}
 
 ---
 # EKS 운영 환경

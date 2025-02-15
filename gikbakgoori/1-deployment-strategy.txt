@@ -1,10 +1,11 @@
 # Exchange Service 배포 전략
 
-## 1. 로컬 개발 환경
+## 1. 로컬 개발 환경 [구현 완료]
 
 ### 기본 구성
 - 백엔드 서버 (단일 인스턴스)
-- 프론트엔드 개발 서버
+- Kafka + Zookeeper (docker-compose-local.yml)
+- Kafka UI
 
 ### 설정
 ```yaml
@@ -12,7 +13,11 @@ spring:
   profiles:
     active: local
   kafka:
-    enabled: false
+    enabled: true
+    bootstrap-servers: localhost:9092
+
+zookeeper:
+  connect-string: localhost:2181
 
 app:
   websocket:
@@ -21,53 +26,58 @@ app:
 
 ### 특징
 - 단순한 구성으로 빠른 개발/테스트
-- 웹소켓 직접 연결
+- 로컬 환경에서 Kafka/Zookeeper 테스트 가능
 - 모든 기능이 단일 인스턴스에서 동작
 
-## 2. Docker 개발 환경
+## 2. Docker 개발 환경 [구현 완료]
 
 ### 기본 구성
-- Nginx (리버스 프록시)
-- 백엔드 서버 (2-3개 인스턴스)
-- Kafka (선택적)
+- 백엔드 서버 (2개 인스턴스: backend1, backend2)
+- Kafka + Zookeeper
+- Kafka UI
 
 ### Docker Compose 설정
 ```yaml
-version: '3.8'
+version: '3'
 services:
-  nginx:
-    image: nginx:latest
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-    depends_on:
-      - backend
-
-  backend:
+  backend1:
     build: .
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-    deploy:
-      replicas: 3
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8080:8080"
 
-  # Kafka는 선택적으로 활성화
+  backend2:
+    build: .
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8081:8080"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    
   kafka:
     image: confluentinc/cp-kafka:latest
-    profiles: ["kafka"]
+    
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
 ```
 
 ### 특징
 - 실제 운영 환경과 유사한 구성
-- 로드밸런싱 테스트 가능
-- Kafka 없이도 정상 동작
+- Leader Election 테스트 가능
+- 리더/팔로워 동작 검증
+- 장애 복구 테스트 가능
 
-## 3. 운영 환경 (Kubernetes)
+## 3. 운영 환경 (Kubernetes) [구현 예정]
 
 ### 기본 구성
 - Ingress Controller (Nginx)
 - Exchange Service Deployment
-- MSK (선택적)
+- MSK (Amazon Managed Streaming for Kafka)
 
 ### Kubernetes 리소스
 1. Deployment
@@ -78,24 +88,15 @@ metadata:
   name: exchange-service
 spec:
   replicas: 3
-  selector:
-    matchLabels:
-      app: exchange-service
   template:
-    metadata:
-      labels:
-        app: exchange-service
     spec:
       containers:
       - name: exchange-service
-        image: ${ECR_REGISTRY}/exchange-service:${TAG}
-        ports:
-        - containerPort: 8080
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "prod"
-        - name: KAFKA_ENABLED
-          value: "${KAFKA_ENABLED}"
+        - name: LOG_LEVEL
+          value: "INFO"
 ```
 
 2. Service
@@ -122,60 +123,52 @@ metadata:
     kubernetes.io/ingress.class: "nginx"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-spec:
-  rules:
-  - host: ${DOMAIN}
-    http:
-      paths:
-      - path: /ws/exchange
-        pathType: Prefix
-        backend:
-          service:
-            name: exchange-service
-            port:
-              number: 80
 ```
 
 ### 배포 구성
-1. 기본 구성 (Kafka 없음)
+1. 현재 구현된 구성
    ```
-   Client -> Ingress -> Service -> Pods
+   [리더 Pod]
+   거래소 -> Pod -> WebSocket -> Clients
+
+   [팔로워 Pod]
+   리더십 모니터링 -> 장애 시 리더로 전환
    ```
 
-2. Kafka 활성화 시
+2. 다음 구현 예정 (Kafka 통합)
    ```
    [리더 Pod]
    거래소 -> Pod -> Kafka
 
    [팔로워 Pod]
-   Kafka -> Pod -> Client
+   Kafka -> Pod -> Clients
    ```
 
 ### 특징
 - Rolling Update 지원
 - Pod Auto Scaling
-- 인프라 장애 시에도 기본 기능 유지
-- Liveness/Readiness Probe 통한 헬스체크
+- Leader Election을 통한 고가용성
+- 리더 장애 시 자동 복구
 
 ## 주요 고려사항
 
-1. 무중단 배포
+1. 무중단 배포 [구현 예정]
    - Rolling Update 전략
    - Readiness Probe로 정상 여부 확인
    - 세션 드레이닝 적용
 
-2. 장애 대응
-   - Pod 장애: Kubernetes가 자동으로 새 Pod 생성
-   - Kafka 장애: WebSocket 모드로 자동 전환
-   - 네트워크 장애: 자동 재연결 메커니즘
+2. 장애 대응 [일부 구현]
+   - [✓] Pod 장애: 리더/팔로워 자동 전환
+   - [ ] Kafka 장애: WebSocket 모드로 자동 전환 (구현 예정)
+   - [✓] 리더 장애: 팔로워가 자동으로 리더로 전환
 
-3. 모니터링
-   - Prometheus + Grafana
-   - Pod 상태 모니터링
-   - 웹소켓 연결 상태 확인
-   - 거래소 연결 상태 확인
+3. 모니터링 [일부 구현]
+   - [✓] 로깅 시스템 구현 (LOG_LEVEL 환경변수)
+   - [✓] 리더십 상태 모니터링
+   - [ ] Prometheus + Grafana (구현 예정)
+   - [ ] 거래소 연결 상태 대시보드 (구현 예정)
 
-4. 보안
+4. 보안 [구현 예정]
    - HTTPS/WSS (Cert-Manager)
    - Network Policy
    - RBAC 

@@ -14,7 +14,7 @@
 - 현재 구현된 거래소 연동을 유지하면서 Kafka 추가
 
 1. Kafka 기본 구조 구현
-   - [ ] KafkaConfig 설정
+   - [✓] KafkaConfig 설정
    ```java
    @Configuration
    public class KafkaConfig {
@@ -23,28 +23,80 @@
    }
    ```
    
-   - [ ] KafkaExchangeService 구현
+   - [✓] KafkaExchangeService 구현 (헬스체크)
    ```java
    @Service
    public class KafkaExchangeService {
+       // 연결 상태 모니터링 구현 완료
+       // TODO: 메시지 발행/구독 구현 필요
        public void publishData(StandardExchangeData data);
        public Flux<StandardExchangeData> subscribeToData();
    }
    ```
 
-2. ExchangeDataIntegrationService 수정
-   - [ ] Kafka 발행 로직 추가 (기존 기능 유지)
-   - [ ] 장애 시 폴백 처리
+### 현재까지 구현된 내용
+1. Kafka 연동 기반 구조
+   - [✓] Docker 환경 구성 (Kafka, Zookeeper, UI)
+   - [✓] 멀티 인스턴스 구성 (backend1, backend2)
+   - [✓] Kafka 연결 상태 모니터링
+   - [✓] 로깅 시스템 최적화
 
-### 2단계: Leader Election [두 번째 목표]
-1. 리더 선출 구현
-   - [ ] LeaderElectionService 인터페이스
-   - [ ] ZookeeperLeaderElection 구현
-   - [ ] 리더/팔로워 상태 관리
+### 다음 구현 단계 (우선순위순)
+1. Leader Election 구현 [다음 구현 예정]
+   - [✓] ZookeeperLeaderElection 구현
+   - [✓] 리더/팔로워 역할 분리
+   - [✓] 리더 변경 시 자동 전환
+   - [✓] 리더십 상태 모니터링
+   ```java
+   public interface LeaderElectionService {
+       boolean isLeader();
+       void onLeadershipGranted();
+       void onLeadershipRevoked();
+   }
+   ```
 
-2. 서비스 통합
-   - [ ] 리더일 때만 거래소 연결
-   - [ ] 팔로워는 Kafka 구독
+2. 리더/팔로워 기반 데이터 처리
+   - [✓] 리더 노드:
+     - [✓] 거래소 연결 관리
+     - [✓] 실시간 데이터 수신
+   - [✓] 팔로워 노드:
+     - [✓] 리더십 모니터링
+     - [✓] 대기 상태 유지
+
+3. Kafka 메시지 처리 구현
+   - [ ] 토픽 자동 생성 기능
+   - [ ] 메시지 발행 (Producer) 구현
+   - [ ] 메시지 구독 (Consumer) 구현
+   - [ ] ExchangeDataIntegrationService와 통합
+
+4. 장애 처리 및 폴백 구현
+   - [ ] 리더 노드 장애 시 자동 전환
+   - [✓] Kafka 장애 시 직접 WebSocket 연결로 폴백
+   - [✓] 재연결 시 자동 복구
+   - [✓] 상태 모니터링 API 구현
+
+### 데이터 흐름 구조
+1. 리더 노드 (backend1)
+```
+[거래소] -> ExchangeDataIntegrationService -> WebSocketHandler -> [Clients]
+```
+
+2. 팔로워 노드 (backend2)
+```
+[대기 상태 유지]
+리더 장애 시 -> 새로운 리더로 전환 -> 거래소 연결 시작
+```
+
+### 구현 전략
+1. Leader Election
+   - Zookeeper 사용
+   - 자동 장애 복구
+   - 리더/팔로워 전환 시 무중단
+
+2. 클라이언트 처리
+   - 단일 WebSocket 엔드포인트 유지 (/ws/exchange)
+   - 내부적으로 리더/팔로워 역할에 따른 처리
+   - 클라이언트는 변경 불필요
 
 ## 패키지 구조
 ```
