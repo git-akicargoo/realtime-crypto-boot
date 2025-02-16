@@ -42,7 +42,13 @@ exchange:
         # - BTC
         # - USDT
 
+# Distribution 설정 추가
 app:
+  distribution:
+    enabled: true              # Distribution 활성화 여부
+    buffer-size: 1024         # 버퍼 크기
+    timeout: 30000            # 타임아웃 (30초)
+    mode: direct             # direct 또는 kafka
   websocket:
     allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:*}
     connection:
@@ -62,11 +68,12 @@ logging:
     org.apache.kafka: ERROR
     org.apache.zookeeper: ERROR    # Zookeeper 로그
     org.apache.curator: ERROR      # Curator 로그
-    com.example.boot.exchange: DEBUG           # 거래소 관련 패키지
-    com.example.boot.web.websocket: DEBUG      # 웹소켓 관련 패키지
-    com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationServiceImpl: DEBUG
-    com.example.boot.exchange.layer3_data_converter.converter: DEBUG
-    com.example.boot.web.websocket.handler.FrontendWebSocketHandler: DEBUG
+    com.example.boot.exchange.layer4_distribution: DEBUG  # Distribution 로깅 추가
+    # com.example.boot.exchange: DEBUG           # 거래소 관련 패키지
+    # com.example.boot.web.websocket: DEBUG      # 웹소켓 관련 패키지
+    # com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationServiceImpl: DEBUG
+    # com.example.boot.exchange.layer3_data_converter.converter: DEBUG
+    # com.example.boot.web.websocket.handler.FrontendWebSocketHandler: DEBUG
 
 ---
 # 로컬 개발 환경
@@ -77,6 +84,10 @@ spring:
   kafka:
     enabled: true  # 로컬 테스트를 위해 활성화
     bootstrap-servers: localhost:9092
+
+app:
+  distribution:
+    mode: direct  # 로컬 환경에서는 direct 모드 사용
 
 zookeeper:
   connect-string: localhost:2181  # 로컬 환경용 Zookeeper 주소
@@ -93,12 +104,12 @@ spring:
     consumer:
       group-id: exchange-group
 
+app:
+  distribution:
+    mode: kafka  # Docker 환경에서는 Kafka 모드 사용
+
 zookeeper:
   connect-string: zookeeper:2181  # 도커 환경용 Zookeeper 주소
-
-app:
-  websocket:
-    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:*}
 
 ---
 # EKS 운영 환경
@@ -111,6 +122,8 @@ spring:
     bootstrap-servers: ${KAFKA_SERVERS}  # K8s Service DNS로 접근
 
 app:
+  distribution:
+    mode: kafka  # 운영 환경에서는 Kafka 모드 사용
   websocket:
     allowed-origins: https://*.yourdomain.com
 

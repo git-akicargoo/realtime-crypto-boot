@@ -1,0 +1,103 @@
+# Exchange Service 구현 계획 (v3)
+
+## 1. 현재 상태
+### Layer 1 - Core [완료]
+- [✓] 기본 모델 정의
+- [✓] 프로토콜 정의
+- [✓] 공통 유틸리티
+
+### Layer 2 - WebSocket [완료]
+- [✓] 웹소켓 연결 관리
+- [✓] 메시지 송수신
+- [✓] 재연결 처리
+
+### Layer 3 - Data Converter [완료]
+- [✓] 표준화된 데이터 모델
+- [✓] 데이터 변환 인터페이스
+- [✓] 거래소별 변환 로직
+- [✓] 통합 변환 서비스
+
+## 2. 다음 구현 단계
+### Layer 4 - Distribution [진행 예정]
+
+1. 패키지 구조
+```
+com.example.boot.exchange.layer4_distribution/
+├── config/
+│   ├── DistributionConfig.java
+│   └── DistributionProperties.java
+├── service/
+│   ├── DistributionService.java        # 인터페이스
+│   ├── DirectDistributionService.java  # 직접 전송 구현
+│   └── KafkaDistributionService.java   # Kafka 구현
+└── model/
+    └── DistributionMessage.java        # 배포용 메시지 모델
+```
+
+2. 구현 계획
+Phase 1: Direct Distribution [현재 목표]
+- [ ] 기본 배포 서비스 구현
+  - [ ] DistributionService 인터페이스 정의
+  - [ ] DirectDistributionService 구현
+  - [ ] 메시지 전달 테스트
+  - [ ] 프론트엔드 웹소켓 핸들러 리팩토링
+
+Phase 2: Kafka Distribution
+- [ ] Kafka 기반 배포 구현
+  - [ ] KafkaDistributionService 구현
+  - [ ] Producer/Consumer 설정
+  - [ ] 장애 복구 로직
+  - [ ] 프론트엔드 영향도 없음 확인
+
+Phase 3: Leader-Follower
+- [ ] 리더 선출
+  - [ ] Zookeeper 연동
+  - [ ] 리더/팔로워 전환
+- [ ] 역할별 동작
+  - [ ] 리더: 거래소 연결 + 배포
+  - [ ] 팔로워: 구독 + 배포
+
+## 3. 구현 전략
+
+### 1. Distribution Service
+- 인터페이스 기반 설계
+- 구현체 전환 가능
+- 장애 시 자동 전환
+- 프론트엔드 독립성 보장
+
+### 2. 데이터 흐름
+Direct 모드:
+```
+[거래소] -> DataConverter -> DirectDistribution -> [Clients]
+```
+
+Kafka 모드 (리더):
+```
+[거래소] -> DataConverter -> KafkaDistribution -> Kafka
+                         \-> DirectDistribution (장애 시)
+```
+
+Kafka 모드 (팔로워):
+```
+Kafka -> KafkaDistribution -> [Clients]
+[거래소] -> DirectDistribution (리더 장애 시)
+```
+
+### 3. 프론트엔드 전략
+- Distribution 레이어와 인터페이스 기반 통신
+- 인프라 구현 방식과 독립적 설계
+- 무중단 전환 지원
+- 장애 시 자동 복구
+
+## 4. 다음 작업
+1. Distribution 레이어 기본 구현
+   - DistributionService 인터페이스 설계
+   - DirectDistributionService 구현
+   - 프론트엔드 웹소켓 핸들러 수정
+   - 테스트 코드 작성
+
+2. 프론트엔드 연동
+   - FrontendWebSocketHandler 리팩토링
+   - Distribution 서비스 연동
+   - 기존 기능 정상 동작 확인
+   - 장애 시나리오 테스트 
