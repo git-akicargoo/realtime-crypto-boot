@@ -107,32 +107,43 @@ public class KafkaDistributionService implements DistributionService {
     }
 
     private Flux<StandardExchangeData> createDistributionFlux() {
+        if (!healthIndicator.isAvailable()) {
+            log.warn("Kafka is not available, not creating distribution flux");
+            return Flux.empty();
+        }
+
         String role = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
-        log.info("🔄 Creating distribution flux - Role: {}", role);
+        log.info("Creating distribution flux - Role: {}", role);
         
         if (leaderElectionService.isLeader()) {
-            // 리더는 거래소 데이터를 Kafka로만 전송
             return integrationService.subscribe()
                 .distinct()
+                .filter(data -> isDistributing() && healthIndicator.isAvailable())
                 .doOnNext(data -> {
-                    log.info("📤 [LEADER] Sending to Kafka - Exchange: {}, Price: {}", 
-                        data.getExchange(), data.getPrice());
-                    kafkaTemplate.send(topic, data.getExchange(), data)
-                        .whenComplete((result, ex) -> {
-                            if (ex == null) {
-                                dataFlowMonitor.incrementKafkaSent();
-                            }
-                        });
-                })
-                .doOnSubscribe(s -> {
-                    log.info("✅ [LEADER] Producer flux started");
-                    isDistributing.set(true);
-                    distributionStatus.setDistributing(true);
+                    if (!healthIndicator.isAvailable()) {
+                        log.warn("Kafka is not available, skipping message");
+                        return;
+                    }
+                    try {
+                        log.info("📤 [LEADER] Sending to Kafka - Exchange: {}, Price: {}", 
+                            data.getExchange(), data.getPrice());
+                        kafkaTemplate.send(topic, data.getExchange(), data)
+                            .whenComplete((result, ex) -> {
+                                if (ex != null) {
+                                    log.error("Failed to send message to Kafka", ex);
+                                } else {
+                                    dataFlowMonitor.incrementKafkaSent();
+                                }
+                            });
+                    } catch (Exception e) {
+                        log.error("Error sending to Kafka", e);
+                    }
                 });
         }
 
-        // 모든 노드(리더 포함)가 Kafka에서 데이터를 받아서 클라이언트에 전송
+        // 팔로워 로직은 그대로 유지
         return kafkaReceiver.receive()
+            .filter(record -> isDistributing() && healthIndicator.isAvailable())
             .map(record -> {
                 StandardExchangeData data = record.value();
                 log.info("📥 [{}] Received from Kafka - Exchange: {}, Price: {}", 
@@ -140,12 +151,7 @@ public class KafkaDistributionService implements DistributionService {
                 dataFlowMonitor.incrementKafkaReceived();
                 return data;
             })
-            .doOnNext(this::broadcastToClients)
-            .doOnSubscribe(s -> {
-                log.info("✅ [{}] Consumer flux started", role);
-                isDistributing.set(true);
-                distributionStatus.setDistributing(true);
-            });
+            .doOnNext(this::broadcastToClients);
     }
 
     @Override
@@ -162,11 +168,18 @@ public class KafkaDistributionService implements DistributionService {
     @Override
     public Mono<Void> stopDistribution() {
         return Mono.fromRunnable(() -> {
+            log.info("Stopping Kafka distribution service");
             isDistributing.set(false);
             distributionStatus.setDistributing(false);
+            
+            // 기존 Flux 구독 취소
+            if (sharedFlux != null) {
+                sharedFlux = null;
+            }
+            
             clientSinks.clear();
-            log.info("Distribution stopped");
-        });
+            log.info("Kafka distribution service stopped");
+        }).then();
     }
 
     @Override

@@ -29,6 +29,9 @@ public class InfrastructureHealthManager {
     private final ApplicationEventPublisher eventPublisher;
     private final DistributionServiceFactory distributionServiceFactory;
     private final Map<String, InfrastructureStatus> healthStatuses = new ConcurrentHashMap<>();
+    
+    private volatile boolean lastKafkaStatus = false;
+    private volatile boolean lastZookeeperStatus = false;
 
     public InfrastructureHealthManager(
         List<HealthCheckable> healthCheckers,
@@ -52,12 +55,9 @@ public class InfrastructureHealthManager {
     @Scheduled(fixedRateString = "${infrastructure.health-check.interval:10000}")
     public void checkAllHealth() {
         if (healthCheckers.isEmpty()) {
-            log.warn("No health checkers registered. Health check skipped.");
             return;
         }
 
-        log.info("Starting health check...");
-        
         boolean currentKafkaStatus = false;
         boolean currentZookeeperStatus = false;
         List<InfrastructureStatus> statuses = new ArrayList<>();
@@ -68,7 +68,6 @@ public class InfrastructureHealthManager {
             healthStatuses.put(checker.getServiceName(), status);
             
             boolean isAvailable = checker.isAvailable();
-            log.info("Health check for {}: {}", checker.getServiceName(), isAvailable ? "AVAILABLE" : "UNAVAILABLE");
             
             if (checker instanceof KafkaHealthIndicator) {
                 currentKafkaStatus = isAvailable;
@@ -77,16 +76,30 @@ public class InfrastructureHealthManager {
             }
         }
 
+        // 상태가 변경된 경우에만 이벤트 발행
+        if (currentKafkaStatus != lastKafkaStatus || currentZookeeperStatus != lastZookeeperStatus) {
+            log.info("Infrastructure status changed - Kafka: {} -> {}, Zookeeper: {} -> {}", 
+                lastKafkaStatus, currentKafkaStatus,
+                lastZookeeperStatus, currentZookeeperStatus);
+                
+            InfrastructureStatusChangeEvent event = new InfrastructureStatusChangeEvent(
+                currentKafkaStatus, currentZookeeperStatus);
+            
+            eventPublisher.publishEvent(event);
+            
+            lastKafkaStatus = currentKafkaStatus;
+            lastZookeeperStatus = currentZookeeperStatus;
+        }
+
+        // 상태 로깅
+        logHealthStatus(statuses);
+    }
+    
+    private void logHealthStatus(List<InfrastructureStatus> statuses) {
         // 현재 인프라 상태 로깅 및 이벤트 발행
         log.info("Current infrastructure status - Kafka:{}, Zookeeper:{}", 
-            currentKafkaStatus, currentZookeeperStatus);
+            lastKafkaStatus, lastZookeeperStatus);
         
-        InfrastructureStatusChangeEvent event = new InfrastructureStatusChangeEvent(
-            currentKafkaStatus, currentZookeeperStatus);
-        
-        log.info("Publishing infrastructure status event: {}", event);
-        eventPublisher.publishEvent(event);
-
         // 현재 사용 중인 서비스 정보 추가
         DistributionService currentService = distributionServiceFactory.getCurrentService();
         String currentServiceName = currentService != null ? 

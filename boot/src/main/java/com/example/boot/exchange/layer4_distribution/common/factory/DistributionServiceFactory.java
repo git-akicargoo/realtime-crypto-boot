@@ -14,15 +14,16 @@ import com.example.boot.exchange.layer4_distribution.kafka.service.KafkaDistribu
 
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
 
 @Component
 @Slf4j
 public class DistributionServiceFactory {
+    private final KafkaDistributionService kafkaService;
     private final DirectDistributionService directService;
     private final KafkaHealthIndicator kafkaHealthIndicator;
     private final ZookeeperHealthIndicator zookeeperHealthIndicator;
-    private final KafkaDistributionService kafkaService;
-    private DistributionService currentService;
+    private volatile DistributionService currentService;
 
     public DistributionServiceFactory(
         @Autowired(required = false) KafkaDistributionService kafkaService,
@@ -55,95 +56,42 @@ public class DistributionServiceFactory {
         log.info("Infrastructure status change detected - Kafka: {}, Zookeeper: {}", 
             event.isKafkaAvailable(), event.isZookeeperAvailable());
             
-        // 현재 서비스 상태 로깅
         log.info("Current service before status change: {}", 
             currentService != null ? currentService.getClass().getSimpleName() : "null");
-        
-        // 디버깅을 위한 조건 로깅 추가
-        log.info("Checking conditions - kafkaService != null: {}, event.isInfrastructureAvailable: {}, currentService instanceof KafkaDistributionService: {}", 
-            kafkaService != null,
-            event.isInfrastructureAvailable(),
-            currentService instanceof KafkaDistributionService);
-
-        if (event.isInfrastructureAvailable()) {
-            if (!(currentService instanceof KafkaDistributionService)) {
-                log.info("📡 Switching to Kafka Distribution Service");
-                switchToKafka();
-            }
-        } else {
-            if (currentService instanceof KafkaDistributionService) {
-                log.info("🔄 Switching to Direct Distribution Service");
-                switchToDirect();
-            }
-        }
-    }
-
-    private synchronized void switchToKafka() {
-        try {
-            log.info("Starting switch to Kafka service...");
-            if (currentService != null) {
-                String previousService = currentService.getClass().getSimpleName();
-                log.info("Stopping current service: {}", previousService);
-                
-                currentService.stopDistribution()
-                    .doOnSuccess(v -> {
-                        log.info("Successfully stopped {}", previousService);
-                        currentService = kafkaService;
-                        log.info("Starting Kafka service...");
-                        currentService.startDistribution()
-                            .doOnSubscribe(s -> log.info("Kafka service subscription started"))
-                            .subscribe(
-                                data -> log.debug("Kafka service processing data: {}", data),
-                                error -> {
-                                    log.error("Error in Kafka service", error);
-                                    switchToDirect();
-                                },
-                                () -> log.info("Kafka service subscription completed")
-                            );
-                        log.info("Current service is now: {}", currentService.getClass().getSimpleName());
-                    })
-                    .doOnError(error -> {
-                        log.error("Error during service switch", error);
-                        switchToDirect();
-                    })
-                    .subscribe();
-            } else {
-                currentService = kafkaService;
-                currentService.startDistribution().subscribe();
-                log.info("Started Kafka service directly");
-            }
-        } catch (Exception e) {
-            log.error("Unexpected error during switch to Kafka", e);
-            switchToDirect();
-        }
-    }
-
-    private synchronized void switchToDirect() {
-        log.info("Starting switch to Direct service...");
-        if (currentService != null) {
-            String previousService = currentService.getClass().getSimpleName();
-            log.info("Stopping current service: {}", previousService);
             
+        if (event.isInfrastructureAvailable() && kafkaService != null) {
+            switchToKafkaService();
+        } else {
+            switchToDirectService();
+        }
+    }
+
+    private void switchToKafkaService() {
+        if (currentService != null) {
+            log.info("Stopping current service: {}", currentService.getClass().getSimpleName());
             currentService.stopDistribution()
                 .doOnSuccess(v -> {
-                    log.info("Successfully stopped {}", previousService);
-                    currentService = directService;
-                    log.info("Starting Direct service...");
-                    currentService.startDistribution()
-                        .doOnSubscribe(s -> log.info("Direct service subscription started"))
-                        .subscribe(
-                            data -> log.debug("Direct service processing data: {}", data),
-                            error -> log.error("Error in Direct service", error),
-                            () -> log.info("Direct service completed")
-                        );
-                    log.info("Current service is now: {}", currentService.getClass().getSimpleName());
+                    currentService = kafkaService;
+                    currentService.startDistribution().subscribe();
+                    log.info("Successfully switched to Kafka service");
                 })
-                .doOnError(error -> log.error("Error during service switch", error))
                 .subscribe();
-        } else {
-            currentService = directService;
-            currentService.startDistribution().subscribe();
-            log.info("Direct service started as fallback");
+        }
+    }
+    
+    private void switchToDirectService() {
+        if (currentService instanceof KafkaDistributionService) {
+            log.info("Switching from Kafka to Direct service");
+            // 먼저 Kafka 서비스 중지
+            Mono.when(
+                currentService.stopDistribution(),
+                kafkaService != null ? kafkaService.stopDistribution() : Mono.empty()
+            ).doOnSuccess(v -> {
+                log.info("Successfully stopped Kafka service");
+                currentService = directService;
+                currentService.startDistribution().subscribe();
+                log.info("Successfully started Direct service");
+            }).subscribe();
         }
     }
 
