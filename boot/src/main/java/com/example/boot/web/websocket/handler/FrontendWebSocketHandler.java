@@ -8,7 +8,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import com.example.boot.exchange.layer4_distribution.common.service.DistributionService;
+import com.example.boot.exchange.layer4_distribution.common.factory.DistributionServiceFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -19,12 +19,12 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class FrontendWebSocketHandler extends TextWebSocketHandler {
 
-    private final DistributionService distributionService;
+    private final DistributionServiceFactory distributionServiceFactory;
     private final ObjectMapper objectMapper;
     private final ConcurrentHashMap<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
 
-    public FrontendWebSocketHandler(DistributionService distributionService) {
-        this.distributionService = distributionService;
+    public FrontendWebSocketHandler(DistributionServiceFactory distributionServiceFactory) {
+        this.distributionServiceFactory = distributionServiceFactory;
         this.objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
@@ -36,7 +36,7 @@ public class FrontendWebSocketHandler extends TextWebSocketHandler {
         log.info("Frontend WebSocket connected: {}", sessionId);
         sessions.put(sessionId, session);
         
-        distributionService.startDistribution()
+        distributionServiceFactory.getCurrentService().startDistribution()
             .subscribe(data -> {
                 if (session.isOpen()) {
                     try {

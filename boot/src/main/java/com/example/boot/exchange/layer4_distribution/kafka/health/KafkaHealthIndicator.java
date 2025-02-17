@@ -2,7 +2,12 @@ package com.example.boot.exchange.layer4_distribution.kafka.health;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -20,78 +25,92 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @EnableScheduling
-@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "infrastructure.health-check.enabled", havingValue = "true", matchIfMissing = true)
 public class KafkaHealthIndicator implements HealthCheckable {
     private final KafkaTemplate<String, StandardExchangeData> kafkaTemplate;
     private final LeaderElectionService leaderElectionService;
     private final DistributionStatus distributionStatus;
     private final String topic;
+    private final ZookeeperHealthIndicator zookeeperHealthIndicator;
+    private final String bootstrapServers;
 
     public KafkaHealthIndicator(
-        KafkaTemplate<String, StandardExchangeData> kafkaTemplate,
+        @Autowired(required = false) KafkaTemplate<String, StandardExchangeData> kafkaTemplate,
         LeaderElectionService leaderElectionService,
         DistributionStatus distributionStatus,
-        @Value("${spring.kafka.topics.trades}") String topic
+        @Value("${spring.kafka.topics.trades}") String topic,
+        ZookeeperHealthIndicator zookeeperHealthIndicator,
+        @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers
     ) {
         this.kafkaTemplate = kafkaTemplate;
         this.leaderElectionService = leaderElectionService;
         this.distributionStatus = distributionStatus;
         this.topic = topic;
-    }
-
-    @Override
-    public String getServiceName() {
-        return "Kafka";
+        this.zookeeperHealthIndicator = zookeeperHealthIndicator;
+        this.bootstrapServers = bootstrapServers;
     }
 
     @Override
     public boolean isAvailable() {
+        // Zookeeper가 먼저 연결되어 있어야 함
+        if (!zookeeperHealthIndicator.isAvailable()) {
+            log.debug("Zookeeper is not available, skipping Kafka check");
+            return false;
+        }
+
         try {
-            // 실제로 Kafka에 연결 시도
+            if (kafkaTemplate == null) {
+                log.debug("KafkaTemplate is null, checking direct connection to {}", bootstrapServers);
+                Properties props = new Properties();
+                props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+                props.put(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG, "3000");
+                props.put(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG, "3000");
+                
+                try (AdminClient adminClient = AdminClient.create(props)) {
+                    adminClient.listTopics().names().get(3, TimeUnit.SECONDS);
+                    log.info("Successfully connected to Kafka at {}", bootstrapServers);
+                    return true;
+                }
+            }
+            
             kafkaTemplate.getProducerFactory().createProducer().partitionsFor(topic);
+            log.info("Kafka is available via KafkaTemplate at {}", bootstrapServers);
             return true;
         } catch (Exception e) {
-            log.error("Kafka availability check failed: {}", e.getMessage());
+            log.debug("Kafka is not available at {}: {}", bootstrapServers, e.getMessage());
             return false;
         }
     }
 
     @Override
     public InfrastructureStatus checkHealth() {
-        String brokers = kafkaTemplate.getProducerFactory()
-            .getConfigurationProperties()
-            .get("bootstrap.servers")
-            .toString();
-            
         try {
-            // Kafka가 연결되어 있는지 확인
-            kafkaTemplate.getProducerFactory().createProducer().partitionsFor(topic);
-            log.info("Kafka is available - Connected to: {}", brokers);
-            
+            boolean available = isAvailable();
             return InfrastructureStatus.builder()
                 .serviceName(getServiceName())
-                .status("CONNECTED")
-                .target(brokers)
+                .status(available ? "CONNECTED" : "DISCONNECTED")
+                .target(bootstrapServers)
                 .details(Map.of(
                     "topic", topic,
-                    "role", leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER",
-                    "distributing", distributionStatus.isDistributing()
+                    "clientType", kafkaTemplate != null ? "KafkaTemplate" : "DirectConnection",
+                    "isLeader", leaderElectionService.isLeader(),
+                    "isDistributing", distributionStatus.isDistributing()
                 ))
                 .lastChecked(LocalDateTime.now())
                 .build();
-                
         } catch (Exception e) {
-            log.error("Failed to connect to Kafka: {}", e.getMessage());
-            
             return InfrastructureStatus.builder()
                 .serviceName(getServiceName())
                 .status("DISCONNECTED")
-                .target(brokers)
-                .details(Map.of(
-                    "error", e.getMessage()
-                ))
+                .target(bootstrapServers)
+                .details(Map.of("error", e.getMessage()))
                 .lastChecked(LocalDateTime.now())
                 .build();
         }
+    }
+
+    @Override
+    public String getServiceName() {
+        return "Kafka";
     }
 } 

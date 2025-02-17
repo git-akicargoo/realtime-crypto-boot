@@ -2,11 +2,15 @@ package com.example.boot.exchange.layer4_distribution.common.monitoring;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.example.boot.exchange.layer4_distribution.common.health.DistributionStatus;
+import com.example.boot.exchange.layer4_distribution.kafka.health.KafkaHealthIndicator;
+import com.example.boot.exchange.layer4_distribution.kafka.health.ZookeeperHealthIndicator;
 import com.example.boot.exchange.layer4_distribution.kafka.service.LeaderElectionService;
 
 import lombok.extern.slf4j.Slf4j;
@@ -22,42 +26,63 @@ public class DataFlowMonitor {
     
     private final LeaderElectionService leaderElectionService;
     private final DistributionStatus distributionStatus;
+    private final KafkaHealthIndicator healthIndicator;
+    private final ZookeeperHealthIndicator zookeeperHealthIndicator;
+    
+    @Value("${infrastructure.monitoring.data-flow.logging.interval:10000}")
+    private long monitoringInterval;
     
     public DataFlowMonitor(
         LeaderElectionService leaderElectionService,
-        DistributionStatus distributionStatus
+        DistributionStatus distributionStatus,
+        @Autowired(required = false) KafkaHealthIndicator healthIndicator,
+        @Autowired(required = false) ZookeeperHealthIndicator zookeeperHealthIndicator
     ) {
         this.leaderElectionService = leaderElectionService;
         this.distributionStatus = distributionStatus;
+        this.healthIndicator = healthIndicator;
+        this.zookeeperHealthIndicator = zookeeperHealthIndicator;
     }
     
-    @Scheduled(fixedRateString = "${infrastructure.monitoring.data-flow.logging.interval:5000}")
+    @Scheduled(fixedRateString = "${infrastructure.monitoring.data-flow.logging.interval:10000}")
     public void logDataFlowMetrics() {
-        String role = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
-        
-        StringBuilder sb = new StringBuilder();
-        sb.append("\n📊 Data Flow Metrics\n");
-        sb.append(String.format("├─ Role: %s\n", role));
-        sb.append(String.format("├─ Distributing: %s\n", distributionStatus.isDistributing()));
-        
-        if (leaderElectionService.isLeader()) {
-            sb.append(String.format("├─ Exchange Data Received: %d\n", exchangeDataReceived.get()));
-            sb.append(String.format("├─ Kafka Messages Sent: %d\n", kafkaMessagesSent.get()));
+        try {
+            // Kafka가 비활성화된 경우
+            if (healthIndicator == null || zookeeperHealthIndicator == null) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("\n📊 System Status\n");
+                sb.append("├─ Mode: Direct (Kafka disabled)\n");
+                sb.append(String.format("├─ Distributing: %s\n", distributionStatus.isDistributing()));
+                sb.append(String.format("└─ Client Messages Sent: %d", clientMessagesSent.get()));
+                log.info(sb.toString());
+                return;
+            }
+
+            // 헬스체크 상태 확인
+            boolean isKafkaAvailable = healthIndicator.isAvailable();
+            boolean isZookeeperAvailable = zookeeperHealthIndicator.isAvailable();
+            
+            StringBuilder sb = new StringBuilder();
+            sb.append("\n📊 System Status\n");
+            
+            if (!isKafkaAvailable || !isZookeeperAvailable) {
+                sb.append("├─ Kafka: ").append(isKafkaAvailable ? "🟢 CONNECTED" : "🔴 DISCONNECTED").append("\n");
+                sb.append("└─ Zookeeper: ").append(isZookeeperAvailable ? "🟢 CONNECTED" : "🔴 DISCONNECTED");
+                log.info(sb.toString());
+                return;
+            }
+
+            // Kafka와 Zookeeper가 모두 연결된 경우에만 상세 메트릭 표시
+            String role = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
+            sb.append(String.format("├─ Role: %s\n", role));
+            sb.append(String.format("├─ Distributing: %s\n", distributionStatus.isDistributing()));
+            sb.append(String.format("├─ Kafka Messages Received: %d\n", kafkaMessagesReceived.get()));
+            sb.append(String.format("└─ Client Messages Sent: %d", clientMessagesSent.get()));
+            
+            log.info(sb.toString());
+        } catch (Exception e) {
+            log.error("Error during metrics logging", e);
         }
-        
-        sb.append(String.format("├─ Kafka Messages Received: %d\n", kafkaMessagesReceived.get()));
-        sb.append(String.format("└─ Client Messages Sent: %d\n", clientMessagesSent.get()));
-        
-        // 초당 처리량 계산
-        sb.append("\n📈 Processing Rate (per second)\n");
-        if (leaderElectionService.isLeader()) {
-            sb.append(String.format("├─ Exchange Data: %.2f\n", exchangeDataReceived.get() / 5.0));
-            sb.append(String.format("├─ Kafka Sent: %.2f\n", kafkaMessagesSent.get() / 5.0));
-        }
-        sb.append(String.format("├─ Kafka Received: %.2f\n", kafkaMessagesReceived.get() / 5.0));
-        sb.append(String.format("└─ Client Sent: %.2f\n", clientMessagesSent.get() / 5.0));
-        
-        log.info(sb.toString());
     }
 
     public void incrementExchangeData() {

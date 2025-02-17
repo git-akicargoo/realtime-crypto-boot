@@ -3,7 +3,6 @@ package com.example.boot.exchange.layer4_distribution.direct.service;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeData;
@@ -11,7 +10,6 @@ import com.example.boot.exchange.layer3_data_converter.service.ExchangeDataInteg
 import com.example.boot.exchange.layer4_distribution.common.health.DistributionStatus;
 import com.example.boot.exchange.layer4_distribution.common.service.DistributionService;
 
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -19,7 +17,6 @@ import reactor.core.publisher.Sinks;
 
 @Slf4j
 @Service
-@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "false", matchIfMissing = true)
 public class DirectDistributionService implements DistributionService {
     private final ExchangeDataIntegrationService integrationService;
     private final ConcurrentHashMap<String, Sinks.Many<StandardExchangeData>> clientSinks;
@@ -34,15 +31,6 @@ public class DirectDistributionService implements DistributionService {
         this.clientSinks = new ConcurrentHashMap<>();
         this.isDistributing = new AtomicBoolean(false);
         this.distributionStatus = distributionStatus;
-    }
-    
-    @PostConstruct
-    public void init() {
-        log.info("Starting direct distribution");
-        startDistribution().subscribe(
-            data -> log.debug("Distributed data: {}", data),
-            error -> log.error("Distribution error: ", error)
-        );
     }
     
     @Override

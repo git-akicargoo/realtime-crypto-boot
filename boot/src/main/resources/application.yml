@@ -2,12 +2,16 @@ spring:
   profiles:
     active: local
   kafka:
-    enabled: true
+    enabled: false  # Kafka 비활성화로 시작
     bootstrap-servers: localhost:9092
     consumer:
       group-id: exchange-group
     topics:
       trades: exchange.trades
+    admin:
+      fail-fast: false    # Kafka 연결 실패해도 애플리케이션 시작
+      operation-timeout: 10000  # 10초
+      close-timeout: 10000      # 10초
 
 zookeeper:
   connect-string: localhost:2181
@@ -16,9 +20,10 @@ zookeeper:
 infrastructure:
   health-check:
     enabled: true
+    interval: 5000  # 5초마다 체크
     logging:
       enabled: true
-      interval: 10000  # 10초
+      level: DEBUG  # 로깅 레벨을 DEBUG로 변경
   monitoring:
     data-flow:
       enabled: true
@@ -74,9 +79,9 @@ logging:
     # 기타 로깅 설정
     com.example.boot.exchange.layer4_distribution.kafka: INFO
     com.example.boot.exchange.layer4_distribution.direct: INFO
-    org.apache.kafka: WARN        # WARN으로 변경
-    org.apache.zookeeper: WARN    # WARN으로 변경
-    org.apache.curator: WARN      # WARN으로 변경
+    org.apache.kafka: ERROR        # WARN -> ERROR로 변경
+    org.apache.zookeeper: ERROR    # WARN -> ERROR로 변경
+    org.apache.curator: ERROR      # WARN -> ERROR로 변경
     org.springframework: WARN
 
 ---
@@ -86,7 +91,6 @@ spring:
     activate:
       on-profile: local
   kafka:
-    enabled: true
     bootstrap-servers: localhost:9092  # localhost로 수정
 
 zookeeper:
@@ -99,7 +103,6 @@ spring:
     activate:
       on-profile: docker
   kafka:
-    enabled: true
     bootstrap-servers: kafka:9092
 
 zookeeper:
@@ -112,7 +115,6 @@ spring:
     activate:
       on-profile: prod
   kafka:
-    enabled: true
     bootstrap-servers: ${KAFKA_SERVERS}
 
 zookeeper:

@@ -4,18 +4,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.event.EventListener;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeData;
 import com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationService;
+import com.example.boot.exchange.layer4_distribution.common.event.LeaderElectionEvent;
 import com.example.boot.exchange.layer4_distribution.common.health.DistributionStatus;
 import com.example.boot.exchange.layer4_distribution.common.monitoring.DataFlowMonitor;
 import com.example.boot.exchange.layer4_distribution.common.service.DistributionService;
 import com.example.boot.exchange.layer4_distribution.kafka.health.KafkaHealthIndicator;
 
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -25,7 +26,6 @@ import reactor.kafka.receiver.ReceiverOptions;
 
 @Slf4j
 @Service
-@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
 public class KafkaDistributionService implements DistributionService {
     private final ExchangeDataIntegrationService integrationService;
     private final KafkaTemplate<String, StandardExchangeData> kafkaTemplate;
@@ -62,18 +62,22 @@ public class KafkaDistributionService implements DistributionService {
         log.info("Initialized Kafka distribution service with topic: {}", topic);
     }
 
-    @PostConstruct
-    public void init() {
+    @Override
+    public Flux<StandardExchangeData> startDistribution() {
+        if (!healthIndicator.isAvailable()) {
+            log.error("❌ Cannot start: Kafka is not available");
+            return Flux.empty();
+        }
+        
         try {
-            log.info("🚀 Initializing KafkaDistributionService\n" +
-                     "├─ Role: {}\n" +
-                     "└─ Topic: {}", 
-                     leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER",
-                     topic);
+            log.info("🚀 Initializing KafkaDistributionService");
             
+            // 초기화 시점에 Kafka 연결 상태 확인
             if (!healthIndicator.isAvailable()) {
                 log.error("❌ Kafka is not available");
-                return;
+                isDistributing.set(false);
+                distributionStatus.setDistributing(false);
+                return Flux.empty();
             }
 
             // createDistributionFlux() 사용
@@ -98,47 +102,50 @@ public class KafkaDistributionService implements DistributionService {
             log.error("❌ Failed to initialize", e);
             throw new RuntimeException("Failed to initialize", e);
         }
-    }
 
-    @Override
-    public Flux<StandardExchangeData> startDistribution() {
-        if (sharedFlux == null) {
-            log.error("❌ Distribution flux not initialized!");
-            return Flux.empty();
-        }
         return sharedFlux;
     }
 
     private Flux<StandardExchangeData> createDistributionFlux() {
         String role = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
-        log.debug("Creating distribution flux - Role: {}", role);
+        log.info("🔄 Creating distribution flux - Role: {}", role);
         
-        Flux<StandardExchangeData> producerFlux = leaderElectionService.isLeader()
-            ? integrationService.subscribe()
-                .doOnSubscribe(s -> log.info("👑 [LEADER] Starting exchange data subscription"))
+        if (leaderElectionService.isLeader()) {
+            // 리더는 거래소 데이터를 Kafka로만 전송
+            return integrationService.subscribe()
+                .distinct()
                 .doOnNext(data -> {
-                    log.debug("📊 [LEADER] Exchange data: {}", data);
-                    dataFlowMonitor.incrementExchangeData();
+                    log.info("📤 [LEADER] Sending to Kafka - Exchange: {}, Price: {}", 
+                        data.getExchange(), data.getPrice());
                     kafkaTemplate.send(topic, data.getExchange(), data)
                         .whenComplete((result, ex) -> {
                             if (ex == null) {
                                 dataFlowMonitor.incrementKafkaSent();
-                                log.debug("📤 [LEADER] Kafka message sent");
                             }
                         });
                 })
-            : Flux.empty();
+                .doOnSubscribe(s -> {
+                    log.info("✅ [LEADER] Producer flux started");
+                    isDistributing.set(true);
+                    distributionStatus.setDistributing(true);
+                });
+        }
 
-        Flux<StandardExchangeData> consumerFlux = kafkaReceiver.receive()
-            .doOnSubscribe(s -> log.info("📥 [{}] Starting Kafka message consumption", role))
-            .doOnNext(record -> {
-                log.debug("📥 [{}] Kafka message received: {}", role, record.value());
+        // 모든 노드(리더 포함)가 Kafka에서 데이터를 받아서 클라이언트에 전송
+        return kafkaReceiver.receive()
+            .map(record -> {
+                StandardExchangeData data = record.value();
+                log.info("📥 [{}] Received from Kafka - Exchange: {}, Price: {}", 
+                    role, data.getExchange(), data.getPrice());
                 dataFlowMonitor.incrementKafkaReceived();
-                broadcastToClients(record.value());
+                return data;
             })
-            .map(record -> record.value());
-
-        return Flux.merge(producerFlux, consumerFlux);
+            .doOnNext(this::broadcastToClients)
+            .doOnSubscribe(s -> {
+                log.info("✅ [{}] Consumer flux started", role);
+                isDistributing.set(true);
+                distributionStatus.setDistributing(true);
+            });
     }
 
     @Override
@@ -168,31 +175,47 @@ public class KafkaDistributionService implements DistributionService {
     }
 
     private void broadcastToClients(StandardExchangeData data) {
-        String nodeRole = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
-        
-        log.debug("🔄 Broadcasting to clients\n" +
-                 "├─ Role: {}\n" +
-                 "├─ Active Clients: {}\n" +
-                 "├─ Exchange: {}\n" +
-                 "└─ Data: {}", 
-                 nodeRole,
-                 clientSinks.size(),
-                 data.getExchange(),
-                 data);
-
-        if (clientSinks.isEmpty()) {
-            log.debug("⚠️ No active clients to broadcast to");
-            return;
-        }
-
-        clientSinks.forEach((clientId, sink) -> {
-            Sinks.EmitResult result = sink.tryEmitNext(data);
-            if (result.isSuccess()) {
-                log.debug("✅ Successfully sent to client: {}", clientId);
+        int clientCount = clientSinks.size();
+        if (clientCount > 0) {
+            clientSinks.forEach((clientId, sink) -> {
+                sink.tryEmitNext(data);
                 dataFlowMonitor.incrementClientSent();
-            } else {
-                log.error("❌ Failed to send to client: {} (Result: {})", clientId, result);
+                log.debug("📨 Sent to client {}: Exchange={}, Price={}", 
+                    clientId, data.getExchange(), data.getPrice());
+            });
+            log.info("📢 Broadcasted to {} clients", clientCount);
+        } else {
+            log.debug("📢 No clients connected to broadcast to");
+        }
+    }
+
+    @Scheduled(fixedRateString = "${infrastructure.health-check.interval:10000}")
+    public void checkAndReconnect() {
+        if (!healthIndicator.isAvailable() && isDistributing.get()) {
+            log.warn("⚠️ Kafka connection lost, attempting to reconnect...");
+            stopDistribution()
+                .then(Mono.defer(() -> {
+                    if (healthIndicator.isAvailable()) {
+                        log.info("✅ Kafka is available again, restarting distribution");
+                        return startDistribution().then();
+                    }
+                    return Mono.empty();
+                }))
+                .subscribe();
+        }
+    }
+
+    // LeaderElection 이벤트 발생 시
+    @EventListener
+    public void handleLeaderElection(LeaderElectionEvent event) {
+        if (event.isLeader()) {
+            // 리더가 될 때도 Kafka 상태 확인
+            if (!healthIndicator.isAvailable()) {
+                log.error("❌ Cannot start as leader: Kafka is not available");
+                return;
             }
-        });
+            // 리더 역할 시작
+            startDistribution().subscribe();
+        }
     }
 } 
