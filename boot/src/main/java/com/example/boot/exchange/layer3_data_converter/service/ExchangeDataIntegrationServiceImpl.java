@@ -71,7 +71,6 @@ public class ExchangeDataIntegrationServiceImpl implements ExchangeDataIntegrati
         
         log.info("Subscribing to exchanges: {}", exchangePairs);
         return subscribe(exchangePairs)
-            .doOnError(error -> log.error("Error in subscription: ", error))
             .retry(config.getConnection().getMaxRetryAttempts())
             .onErrorResume(e -> {
                 log.error("Failed to subscribe after retries: ", e);

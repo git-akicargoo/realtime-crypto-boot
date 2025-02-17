@@ -33,17 +33,16 @@ public class FrontendWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String sessionId = session.getId();
-        log.debug("Frontend WebSocket connected: {}", sessionId);
+        log.info("Frontend WebSocket connected: {}", sessionId);
         sessions.put(sessionId, session);
         
         distributionService.startDistribution()
-            .doOnSubscribe(s -> log.debug("Starting to receive distribution data for session: {}", sessionId))
-            .doOnNext(data -> log.debug("Received data for session {}: {}", sessionId, data))
             .subscribe(data -> {
                 if (session.isOpen()) {
                     try {
                         String jsonData = objectMapper.writeValueAsString(data);
                         session.sendMessage(new TextMessage(jsonData));
+                        log.debug("Sent data to client {}: {}", sessionId, data);
                     } catch (Exception e) {
                         handleSessionError(session, e);
                     }

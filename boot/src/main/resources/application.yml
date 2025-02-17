@@ -2,9 +2,30 @@ spring:
   profiles:
     active: local
   kafka:
-    enabled: false  # 기본값은 false로 설정
+    enabled: true
+    bootstrap-servers: localhost:9092
     consumer:
-      group-id: exchange-group    # 모든 환경에서 공통으로 사용할 group-id
+      group-id: exchange-group
+    topics:
+      trades: exchange.trades
+
+zookeeper:
+  connect-string: localhost:2181
+
+# Health Check & Monitoring 설정
+infrastructure:
+  health-check:
+    enabled: true
+    logging:
+      enabled: true
+      interval: 10000  # 10초
+  monitoring:
+    data-flow:
+      enabled: true
+      logging:
+        enabled: true
+        level: INFO
+        interval: 10000  # 10초로 통일
 
 server:
   port: 8080
@@ -37,43 +58,26 @@ exchange:
         - USDT
     bithumb: 
       supported-currencies:
-        # 빗썸은 KRW 만 지원한다네;;;
         - KRW    
-        # - BTC
-        # - USDT
-
-# Distribution 설정 추가
-app:
-  distribution:
-    enabled: true              # Distribution 활성화 여부
-    buffer-size: 1024         # 버퍼 크기
-    timeout: 30000            # 타임아웃 (30초)
-    mode: direct             # direct 또는 kafka
-  websocket:
-    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:*}
-    connection:
-      max-retry-attempts: 3
-      reconnect-delay: 1000
-      connection-timeout: 5000
-  kafka:
-    topic:
-      trades: exchange.trades     # 거래 데이터용 토픽
-      leader: exchange.leader     # 리더 선출용 토픽
-    leader:
-      partition: 0               # 리더 선출용 파티션 번호
 
 logging:
+  pattern:
+    console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr([%logger{0}]){cyan} %clr(:){faint} %m%n"
   level:
-    root: ${LOG_LEVEL:INFO}  # 기본값은 INFO, 환경변수로 오버라이드 가능
-    org.apache.kafka: ERROR
-    org.apache.zookeeper: ERROR    # Zookeeper 로그
-    org.apache.curator: ERROR      # Curator 로그
-    com.example.boot.exchange.layer4_distribution: DEBUG  # Distribution 로깅 추가
-    # com.example.boot.exchange: DEBUG           # 거래소 관련 패키지
-    # com.example.boot.web.websocket: DEBUG      # 웹소켓 관련 패키지
-    # com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationServiceImpl: DEBUG
-    # com.example.boot.exchange.layer3_data_converter.converter: DEBUG
-    # com.example.boot.web.websocket.handler.FrontendWebSocketHandler: DEBUG
+    root: INFO
+    # 데이터 흐름 관련 로깅 설정 (INFO로 변경)
+    com.example.boot.exchange.layer4_distribution.kafka.service.KafkaDistributionService: INFO
+    com.example.boot.exchange.layer4_distribution.direct.service.DirectDistributionService: INFO
+    # 모니터링 관련 로깅 설정 (INFO로 변경)
+    com.example.boot.exchange.layer4_distribution.common.monitoring: INFO
+    com.example.boot.exchange.layer4_distribution.common.health: INFO
+    # 기타 로깅 설정
+    com.example.boot.exchange.layer4_distribution.kafka: INFO
+    com.example.boot.exchange.layer4_distribution.direct: INFO
+    org.apache.kafka: WARN        # WARN으로 변경
+    org.apache.zookeeper: WARN    # WARN으로 변경
+    org.apache.curator: WARN      # WARN으로 변경
+    org.springframework: WARN
 
 ---
 # 로컬 개발 환경
@@ -82,15 +86,11 @@ spring:
     activate:
       on-profile: local
   kafka:
-    enabled: true  # 로컬 테스트를 위해 활성화
-    bootstrap-servers: localhost:9092
-
-app:
-  distribution:
-    mode: direct  # 로컬 환경에서는 direct 모드 사용
+    enabled: true
+    bootstrap-servers: localhost:9092  # localhost로 수정
 
 zookeeper:
-  connect-string: localhost:2181  # 로컬 환경용 Zookeeper 주소
+  connect-string: localhost:2181
 
 ---
 # Docker Compose 환경
@@ -101,15 +101,9 @@ spring:
   kafka:
     enabled: true
     bootstrap-servers: kafka:9092
-    consumer:
-      group-id: exchange-group
-
-app:
-  distribution:
-    mode: kafka  # Docker 환경에서는 Kafka 모드 사용
 
 zookeeper:
-  connect-string: zookeeper:2181  # 도커 환경용 Zookeeper 주소
+  connect-string: zookeeper:2181
 
 ---
 # EKS 운영 환경
@@ -119,13 +113,10 @@ spring:
       on-profile: prod
   kafka:
     enabled: true
-    bootstrap-servers: ${KAFKA_SERVERS}  # K8s Service DNS로 접근
+    bootstrap-servers: ${KAFKA_SERVERS}
 
-app:
-  distribution:
-    mode: kafka  # 운영 환경에서는 Kafka 모드 사용
-  websocket:
-    allowed-origins: https://*.yourdomain.com
+zookeeper:
+  connect-string: ${ZOOKEEPER_SERVERS}
 
 
 

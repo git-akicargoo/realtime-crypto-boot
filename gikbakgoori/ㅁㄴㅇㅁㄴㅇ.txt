@@ -1,178 +1,213 @@
-수정이 필요한 부분:
-바이낸스 컨버터의 페어 포맷팅 수정 (EUSDT-DOG → DOGE-USDT)
-빗썸 프로토콜 구현체 점검
-바이낸스 BTC 마켓 구독 확인
+package com.example.boot.exchange.layer3_data_converter.service;
 
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
+import org.springframework.stereotype.Service;
 
+import com.example.boot.exchange.layer1_core.config.ExchangeConfig;
+import com.example.boot.exchange.layer1_core.model.CurrencyPair;
+import com.example.boot.exchange.layer1_core.model.ExchangeMessage;
+import com.example.boot.exchange.layer1_core.protocol.BaseExchangeProtocol;
+import com.example.boot.exchange.layer2_websocket.connection.ConnectionFactory;
+import com.example.boot.exchange.layer2_websocket.handler.MessageHandler;
+import com.example.boot.exchange.layer3_data_converter.converter.ExchangeDataConverter;
+import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeData;
 
-com.example.boot.exchange/
-├── core/                           # Layer 1
-│   ├── protocol/
-│   │   ├── ExchangeProtocol.java
-│   │   ├── BinanceProtocol.java
-│   │   ├── UpbitProtocol.java
-│   │   └── BithumbProtocol.java
-│   └── model/
-│       ├── CurrencyPair.java
-│       ├── ExchangeMessage.java
-│       └── NormalizedMessage.java
-│
-├── websocket/                      # Layer 2
-│   ├── WebSocketConnector.java
-│   ├── ReactiveWebSocketConnector.java
-│   ├── SessionManager.java
-│   └── config/
-│       └── WebSocketConfig.java
-│
-├── message/                        # Layer 3
-│   ├── MessageHandler.java
-│   ├── ExchangeMessageHandler.java
-│   ├── MessageTransformer.java
-│   └── MessageValidator.java
-│
-├── subscription/                   # Layer 4
-│   ├── SubscriptionManager.java
-│   ├── SubscriptionStore.java
-│   └── validator/
-│       └── SubscriptionValidator.java
-│
-└── infrastructure/                 # 외부 통합
-    ├── kafka/
-    │   ├── config/
-    │   │   ├── KafkaConsumerConfig.java
-    │   │   └── KafkaProducerConfig.java
-    │   └── publisher/
-    │       └── KafkaMessagePublisher.java
-    └── client/
-        ├── ClientWebSocketHandler.java
-        └── ClientSessionManager.java
+import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
+@Slf4j
+@Service
+public class ExchangeDataIntegrationServiceImpl implements ExchangeDataIntegrationService {
+    private final Map<String, ExchangeDataConverter> converters;
+    private final Map<String, BaseExchangeProtocol> protocols;
+    private final ConnectionFactory connectionFactory;
+    private final ExchangeConfig config;
+    
+    // 활성화된 WebSocket 핸들러 관리
+    private final Map<String, MessageHandler> activeHandlers = new ConcurrentHashMap<>();
 
+    public ExchangeDataIntegrationServiceImpl(
+        List<ExchangeDataConverter> converterList,
+        List<BaseExchangeProtocol> protocolList,
+        ConnectionFactory connectionFactory,
+        ExchangeConfig config
+    ) {
+        this.converters = converterList.stream()
+            .collect(Collectors.toMap(
+                ExchangeDataConverter::getExchangeName,
+                converter -> converter
+            ));
+        this.protocols = protocolList.stream()
+            .collect(Collectors.toMap(
+                BaseExchangeProtocol::getExchangeName,
+                protocol -> protocol
+            ));
+        this.connectionFactory = connectionFactory;
+        this.config = config;
+    }
 
+    @Override
+    public Flux<StandardExchangeData> subscribe() {
+        Map<String, List<CurrencyPair>> exchangePairs = createExchangePairsFromConfig();
+        
+        // 구독할 페어가 없는 거래소는 제외
+        exchangePairs = exchangePairs.entrySet().stream()
+            .filter(entry -> !entry.getValue().isEmpty())
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                Map.Entry::getValue
+            ));
+        
+        if (exchangePairs.isEmpty()) {
+            return Flux.error(new IllegalStateException("No valid exchange pairs configured"));
+        }
+        
+        log.info("Subscribing to exchanges: {}", exchangePairs);
+        return subscribe(exchangePairs)
+            .retry(config.getConnection().getMaxRetryAttempts())
+            .onErrorResume(e -> {
+                log.error("Failed to subscribe after retries: ", e);
+                return Flux.empty();
+            });
+    }
 
-# Exchange Service 아키텍처 설계
+    private Map<String, List<CurrencyPair>> createExchangePairsFromConfig() {
+        Map<String, List<CurrencyPair>> pairs = new HashMap<>();
+        
+        if (config.getExchanges().getBinance() != null) {
+            var binancePairs = createPairsFromConfig(
+                config.getCommon().getSupportedSymbols(), 
+                config.getExchanges().getBinance().getSupportedCurrencies()
+            );
+            pairs.put("binance", binancePairs);
+            log.debug("Created pairs for Binance: {}", binancePairs);
+        }
+        
+        if (config.getExchanges().getUpbit() != null) {
+            var upbitPairs = createPairsFromConfig(
+                config.getCommon().getSupportedSymbols(), 
+                config.getExchanges().getUpbit().getSupportedCurrencies()
+            );
+            pairs.put("upbit", upbitPairs);
+            log.debug("Created pairs for Upbit: {}", upbitPairs);
+        }
+        
+        if (config.getExchanges().getBithumb() != null) {
+            var bithumbPairs = createPairsFromConfig(
+                config.getCommon().getSupportedSymbols(), 
+                config.getExchanges().getBithumb().getSupportedCurrencies()
+            );
+            pairs.put("bithumb", bithumbPairs);
+            log.debug("Created pairs for Bithumb: {}", bithumbPairs);
+        }
+        
+        log.info("Created exchange pairs from config: {}", pairs);
+        return pairs;
+    }
 
-## 핵심 레이어 구조
+    private List<CurrencyPair> createPairsFromConfig(List<String> symbols, List<String> currencies) {
+        return symbols.stream()
+            .flatMap(symbol -> currencies.stream()
+                .map(currency -> new CurrencyPair(currency, symbol)))
+            .collect(Collectors.toList());
+    }
 
-### Layer 1: Core Domain
-위치: com.example.boot.exchange.core
-- 가장 핵심적인 비즈니스 로직
-- 외부 의존성이 전혀 없는 순수한 도메인 로직
+    @Override
+    public Flux<StandardExchangeData> subscribe(Map<String, List<CurrencyPair>> exchangePairs) {
+        return Flux.fromIterable(exchangePairs.entrySet())
+            .flatMap(entry -> subscribeToExchange(entry.getKey(), entry.getValue()));
+    }
 
-구성:
-/protocol
-  - ExchangeProtocol (interface)
-  - BinanceProtocol
-  - UpbitProtocol
-  - BithumbProtocol
-/model
-  - CurrencyPair
-  - NormalizedMessage
-  - ExchangeMessage
+    private Flux<StandardExchangeData> subscribeToExchange(String exchange, List<CurrencyPair> pairs) {
+        if (pairs.isEmpty()) {
+            log.warn("No pairs configured for exchange: {}", exchange);
+            return Flux.empty();
+        }
 
-주요 변경사항:
-- 모든 외부 의존성 제거
-- 순수 도메인 모델과 프로토콜 정의
-- Immutable 객체 사용
+        BaseExchangeProtocol protocol = protocols.get(exchange);
+        ExchangeDataConverter converter = converters.get(exchange);
+        
+        if (protocol == null || converter == null) {
+            log.error("Missing protocol or converter for exchange: {}", exchange);
+            return Flux.empty();
+        }
 
-### Layer 2: WebSocket Connection
-위치: com.example.boot.exchange.websocket
-- 거래소 웹소켓 연결 관리
-- Reactive Streams 기반 비동기 처리
+        String wsUrl = getWebSocketUrl(exchange);
+        if (wsUrl == null) {
+            log.error("Missing WebSocket URL for exchange: {}", exchange);
+            return Flux.empty();
+        }
 
-구성:
-- WebSocketConnector (interface)
-- ReactiveWebSocketConnector
-- SessionManager
-- ConnectionConfig
+        return connectionFactory.createConnection(exchange, wsUrl)
+            .flatMap(handler -> {
+                activeHandlers.put(exchange, handler);
+                
+                return sendSubscribeMessage(exchange, handler, protocol, pairs)
+                    .thenMany(handler.receiveMessage())
+                    .map(raw -> new ExchangeMessage(
+                        exchange, 
+                        raw, 
+                        Instant.now(), 
+                        ExchangeMessage.MessageType.TICKER
+                    ))
+                    .flatMap(msg -> converter.convert(msg)
+                        .doOnError(e -> log.error("Error converting message from {}: {}", 
+                            exchange, e.getMessage()))
+                        .onErrorResume(e -> Mono.empty())
+                    )
+                    .doOnNext(data -> log.debug("Converted data from {}: {}", exchange, data))
+                    .doOnError(error -> log.error("Error processing message from {}: {}", 
+                        exchange, error.getMessage()));
+            });
+    }
 
-주요 변경사항:
-- Flux 기반 스트림 처리 구현
+    private Flux<Void> sendSubscribeMessage(
+        String exchange, 
+        MessageHandler handler, 
+        BaseExchangeProtocol protocol,
+        List<CurrencyPair> pairs
+    ) {
+        String message = protocol.createSubscribeMessage(pairs);
+        return exchange.equalsIgnoreCase("upbit")
+            ? handler.sendBinaryMessage(message.getBytes())
+            : handler.sendMessage(message);
+    }
 
+    private String getWebSocketUrl(String exchange) {
+        return switch (exchange.toLowerCase()) {
+            case "binance" -> config.getWebsocket().getBinance();
+            case "upbit" -> config.getWebsocket().getUpbit();
+            case "bithumb" -> config.getWebsocket().getBithumb();
+            default -> null;
+        };
+    }
 
+    @Override
+    public Mono<Void> unsubscribeAll() {
+        return Flux.fromIterable(activeHandlers.entrySet())
+            .flatMap(entry -> unsubscribe(entry.getKey()))
+            .then();
+    }
 
+    @Override
+    public Mono<Void> unsubscribe(String exchange) {
+        MessageHandler handler = activeHandlers.remove(exchange);
+        if (handler == null) {
+            return Mono.empty();
+        }
 
-### Layer 3: Message Handler
-위치: com.example.boot.exchange.message
-- 메시지 정규화와 변환
-- Reactive 스트림 처리
-
-구성:
-- MessageHandler (interface)
-- ExchangeMessageHandler
-- MessageTransformer
-- MessageValidator
-
-주요 변경사항:
-- Reactive 스트림 처리 적용
-
-
-
-### Layer 4: Subscription
-위치: com.example.boot.exchange.subscription
-- 구독 관리 및 상태 관리
-- Reactive 기반 구독 처리
-
-구성:
-- SubscriptionManager
-- SubscriptionStore
-- SubscriptionValidator
-
-주요 변경사항:
-- Reactive 구독 관리
-
-
-
-## 외부 통합 계층 (Infrastructure)
-
-### Kafka Integration
-위치: com.example.boot.infrastructure.kafka
-- 핵심 레이어들을 사용하는 카프카 구현
-- 핵심 레이어에 대한 의존성만 있음
-
-구성:
-- KafkaMessagePublisher
-- KafkaConsumerConfig
-- KafkaProducerConfig
-- LeaderElection (선택적)
-
-### Client Integration
-위치: com.example.boot.infrastructure.client
-- 핵심 레이어들을 사용하는 클라이언트 구현
-- 핵심 레이어에 대한 의존성만 있음
-
-구성:
-- ClientWebSocketHandler
-- ClientSessionManager
-- WebSocketConfig
-
-## 주요 설계 원칙
-
-1. Reactive 프로그래밍
-- 모든 비동기 작업은 Reactor의 Flux/Mono 사용
-- 블로킹 작업 최소화
-- 백프레셔 지원
-
-2. 의존성 방향
-- 핵심 레이어(1-4)는 외부 의존성이 없음
-- 카프카와 클라이언트는 핵심 레이어를 사용
-- 상위 레이어는 하위 레이어에만 의존
-
-3. 확장성
-- 새로운 거래소 추가가 용이한 구조
-- 메시지 처리 파이프라인의 유연한 확장
-- 구독 관리의 독립적 확장
-
-4. 테스트 용이성
-- 각 레이어별 독립적인 테스트 가능
-- 외부 의존성에 대한 모킹 최소화
-- Reactive 스트림 테스트 지원
-
-
-이렇게 구성하면:
-핵심 레이어들이 완전히 독립적
-카프카와 클라이언트는 단순히 이 레이어들을 사용하는 구현체
-Reactive 스트림으로 일관된 비동기 처리
-테스트와 유지보수가 용이
-이런 방향으로 진행하는 것이 어떠신가요?
+        BaseExchangeProtocol protocol = protocols.get(exchange);
+        String unsubscribeMessage = protocol.createUnsubscribeMessage(List.of());
+        
+        return handler.sendMessage(unsubscribeMessage)
+            .thenMany(handler.disconnect())
+            .then();
+    }
+} 
