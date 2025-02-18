@@ -9,6 +9,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.example.boot.common.logging.ScheduledLogger;
 import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeData;
 import com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationService;
 import com.example.boot.exchange.layer4_distribution.common.event.LeaderElectionEvent;
@@ -37,6 +38,7 @@ public class KafkaDistributionService implements DistributionService {
     private final LeaderElectionService leaderElectionService;
     private final DistributionStatus distributionStatus;
     private final DataFlowMonitor dataFlowMonitor;
+    private final ScheduledLogger scheduledLogger;
     private volatile Flux<StandardExchangeData> sharedFlux;
 
     public KafkaDistributionService(
@@ -47,7 +49,8 @@ public class KafkaDistributionService implements DistributionService {
         LeaderElectionService leaderElectionService,
         @Value("${spring.kafka.topics.trades}") String topic,
         DistributionStatus distributionStatus,
-        DataFlowMonitor dataFlowMonitor
+        DataFlowMonitor dataFlowMonitor,
+        ScheduledLogger scheduledLogger
     ) {
         this.integrationService = integrationService;
         this.kafkaTemplate = kafkaTemplate;
@@ -59,6 +62,7 @@ public class KafkaDistributionService implements DistributionService {
         this.leaderElectionService = leaderElectionService;
         this.distributionStatus = distributionStatus;
         this.dataFlowMonitor = dataFlowMonitor;
+        this.scheduledLogger = scheduledLogger;
         log.info("Initialized Kafka distribution service with topic: {}", topic);
     }
 
@@ -113,7 +117,7 @@ public class KafkaDistributionService implements DistributionService {
         }
 
         String role = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
-        log.info("Creating distribution flux - Role: {}", role);
+        scheduledLogger.scheduleLog(log, "Creating distribution flux - Role: {}", role);
         
         if (leaderElectionService.isLeader()) {
             return integrationService.subscribe()
@@ -125,7 +129,7 @@ public class KafkaDistributionService implements DistributionService {
                         return;
                     }
                     try {
-                        log.info("📤 [LEADER] Sending to Kafka - Exchange: {}, Price: {}", 
+                        scheduledLogger.scheduleLog(log, "📤 [LEADER] Processing messages - Exchange: {}, Price: {}", 
                             data.getExchange(), data.getPrice());
                         kafkaTemplate.send(topic, data.getExchange(), data)
                             .whenComplete((result, ex) -> {
@@ -141,12 +145,11 @@ public class KafkaDistributionService implements DistributionService {
                 });
         }
 
-        // 팔로워 로직은 그대로 유지
         return kafkaReceiver.receive()
             .filter(record -> isDistributing() && healthIndicator.isAvailable())
             .map(record -> {
                 StandardExchangeData data = record.value();
-                log.info("📥 [{}] Received from Kafka - Exchange: {}, Price: {}", 
+                scheduledLogger.scheduleLog(log, "📥 [{}] Processing messages - Exchange: {}, Price: {}", 
                     role, data.getExchange(), data.getPrice());
                 dataFlowMonitor.incrementKafkaReceived();
                 return data;
@@ -196,7 +199,7 @@ public class KafkaDistributionService implements DistributionService {
                 log.debug("📨 Sent to client {}: Exchange={}, Price={}", 
                     clientId, data.getExchange(), data.getPrice());
             });
-            log.info("📢 Broadcasted to {} clients", clientCount);
+            scheduledLogger.scheduleLog(log, "📢 Active clients: {}", clientCount);
         } else {
             log.debug("📢 No clients connected to broadcast to");
         }

@@ -52,6 +52,12 @@ public class KafkaConfig {
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        
+        // 재시도 관련 설정 추가
+        config.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "1000");
+        config.put(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG, "1000");
+        config.put(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, "5000");
+        
         return new DefaultKafkaProducerFactory<>(config);
     }
 
@@ -68,9 +74,16 @@ public class KafkaConfig {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         consumerProps.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
+        
+        // 타임아웃 설정 조정
         consumerProps.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "3000");
         consumerProps.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, "3000");
         consumerProps.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "3000");
+        
+        // 재시도 관련 설정 추가
+        consumerProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, "1000");  // 재시도 간격
+        consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, "1000");  // 재연결 간격
+        consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, "5000");  // 최대 재연결 간격
 
         return ReceiverOptions.<String, StandardExchangeData>create(consumerProps)
             .subscription(Collections.singletonList(topic))

@@ -45,41 +45,44 @@ public class DataFlowMonitor {
     }
     
     @Scheduled(fixedRateString = "${infrastructure.monitoring.data-flow.logging.interval:10000}")
-    public void logDataFlowMetrics() {
+    public void logMetrics() {
         try {
-            // Kafka가 비활성화된 경우
-            if (healthIndicator == null || zookeeperHealthIndicator == null) {
-                StringBuilder sb = new StringBuilder();
-                sb.append("\n📊 System Status\n");
-                sb.append("├─ Mode: Direct (Kafka disabled)\n");
-                sb.append(String.format("├─ Distributing: %s\n", distributionStatus.isDistributing()));
-                sb.append(String.format("└─ Client Messages Sent: %d", clientMessagesSent.get()));
-                log.info(sb.toString());
+            if (!distributionStatus.isDistributing()) {
+                log.debug("Distribution is not active");
                 return;
             }
 
-            // 헬스체크 상태 확인
-            boolean isKafkaAvailable = healthIndicator.isAvailable();
-            boolean isZookeeperAvailable = zookeeperHealthIndicator.isAvailable();
-            
             StringBuilder sb = new StringBuilder();
             sb.append("\n📊 System Status\n");
             
-            if (!isKafkaAvailable || !isZookeeperAvailable) {
-                sb.append("├─ Kafka: ").append(isKafkaAvailable ? "🟢 CONNECTED" : "🔴 DISCONNECTED").append("\n");
-                sb.append("└─ Zookeeper: ").append(isZookeeperAvailable ? "🟢 CONNECTED" : "🔴 DISCONNECTED");
-                log.info(sb.toString());
-                return;
+            // 현재 서비스 타입을 확인하여 모드 결정
+            boolean isKafkaMode = healthIndicator != null && 
+                                zookeeperHealthIndicator != null && 
+                                healthIndicator.isAvailable() && 
+                                zookeeperHealthIndicator.isAvailable();
+            
+            // Direct 모드일 때
+            if (!isKafkaMode) {
+                long received = exchangeDataReceived.get();
+                long sent = clientMessagesSent.get();
+                
+                sb.append("├─ Mode: DIRECT\n");
+                sb.append(String.format("├─ Exchange Data Received: %d\n", received));
+                sb.append(String.format("├─ Clients Connected: %d\n", sent > 0 ? 1 : 0));
+                sb.append(String.format("└─ Client Messages Sent: %d", sent));
+            } 
+            // Kafka 모드일 때
+            else {
+                String role = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
+                sb.append("├─ Mode: KAFKA\n");
+                sb.append(String.format("├─ Role: %s\n", role));
+                sb.append(String.format("├─ Kafka Messages: Sent=%d, Received=%d\n", 
+                    kafkaMessagesSent.get(), kafkaMessagesReceived.get()));
+                sb.append(String.format("└─ Client Messages Sent: %d", clientMessagesSent.get()));
             }
-
-            // Kafka와 Zookeeper가 모두 연결된 경우에만 상세 메트릭 표시
-            String role = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
-            sb.append(String.format("├─ Role: %s\n", role));
-            sb.append(String.format("├─ Distributing: %s\n", distributionStatus.isDistributing()));
-            sb.append(String.format("├─ Kafka Messages Received: %d\n", kafkaMessagesReceived.get()));
-            sb.append(String.format("└─ Client Messages Sent: %d", clientMessagesSent.get()));
             
             log.info(sb.toString());
+            
         } catch (Exception e) {
             log.error("Error during metrics logging", e);
         }

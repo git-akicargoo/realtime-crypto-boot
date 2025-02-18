@@ -26,6 +26,8 @@ public class ZookeeperConfig {
     
     private final LeaderElectionService leaderElectionService;
     
+    private CuratorFramework client;
+    
     public ZookeeperConfig(LeaderElectionService leaderElectionService) {
         this.leaderElectionService = leaderElectionService;
     }
@@ -38,12 +40,25 @@ public class ZookeeperConfig {
     
     @EventListener
     public void handleInfrastructureStatusChange(InfrastructureStatusChangeEvent event) {
-        if (event.isZookeeperAvailable()) {
-            log.info("Zookeeper available, creating new client");
-            CuratorFramework newClient = createClient();
-            if (newClient != null) {
-                log.info("Successfully created new Zookeeper client");
-                leaderElectionService.setClient(newClient);  // 직접 클라이언트 설정
+        if (event.isInfrastructureAvailable()) {
+            if (client == null) {
+                CuratorFramework newClient = createClient();
+                if (newClient != null) {
+                    client = newClient;
+                    leaderElectionService.setClient(newClient);
+                }
+            }
+        } else {
+            // 인프라 사용 불가시 클라이언트 정리
+            if (client != null) {
+                try {
+                    client.close();
+                } catch (Exception e) {
+                    log.debug("Error closing Zookeeper client: {}", e.getMessage());
+                } finally {
+                    client = null;
+                    leaderElectionService.setClient(null);
+                }
             }
         }
     }
@@ -56,22 +71,22 @@ public class ZookeeperConfig {
                 .connectString(connectString)
                 .sessionTimeoutMs(5000)
                 .connectionTimeoutMs(3000)
-                .retryPolicy(new RetryNTimes(5, 1000))
+                .retryPolicy(new RetryNTimes(3, 1000))  // 재시도 횟수 줄임
                 .namespace("exchange")
                 .build();
                 
             newClient.start();
             
-            if (newClient.blockUntilConnected(5, TimeUnit.SECONDS)) {
+            if (newClient.blockUntilConnected(3, TimeUnit.SECONDS)) {
                 log.info("🟢 Successfully connected to Zookeeper at {}", connectString);
                 return newClient;
             } else {
-                log.warn("Failed to connect to Zookeeper at {}", connectString);
+                log.debug("Failed to connect to Zookeeper at {}", connectString);
                 newClient.close();
                 return null;
             }
         } catch (Exception e) {
-            log.error("Failed to start Zookeeper client: {}", e.getMessage());
+            log.debug("Failed to start Zookeeper client: {}", e.getMessage());
             return null;
         }
     }

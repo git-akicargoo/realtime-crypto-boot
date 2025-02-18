@@ -96,34 +96,31 @@ public class InfrastructureHealthManager {
     }
     
     private void logHealthStatus(List<InfrastructureStatus> statuses) {
-        // 현재 인프라 상태 로깅 및 이벤트 발행
-        log.info("Current infrastructure status - Kafka:{}, Zookeeper:{}", 
-            lastKafkaStatus, lastZookeeperStatus);
-        
-        // 현재 사용 중인 서비스 정보 추가
+        // 각 서비스의 상태를 한 줄로 표현
+        statuses.forEach(status -> {
+            String statusEmoji = "CONNECTED".equals(status.getStatus()) ? "🟢" : "🔴";
+            String details = status.getDetails().entrySet().stream()
+                .map(e -> e.getKey() + ":" + e.getValue())
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("");
+            
+            log.info("{} {} | Status:{} | Target:{} | {}",
+                statusEmoji,
+                status.getServiceName(),
+                status.getStatus(),
+                status.getTarget(),
+                details
+            );
+        });
+
+        // 현재 서비스 상태도 한 줄로
         DistributionService currentService = distributionServiceFactory.getCurrentService();
         String currentServiceName = currentService != null ? 
             currentService.getClass().getSimpleName() : "No active service";
         boolean isDistributing = currentService != null ? currentService.isDistributing() : false;
-
-        StringBuilder sb = new StringBuilder("\n🏥 Infrastructure Health Status\n");
-        statuses.forEach(status -> {
-            String statusEmoji = "CONNECTED".equals(status.getStatus()) ? "🟢" : "🔴";
-            sb.append(String.format("├─ %s %s\n", statusEmoji, status.getServiceName()))
-              .append(String.format("│  ├─ Status: %s\n", status.getStatus()))
-              .append(String.format("│  ├─ Target: %s\n", status.getTarget()));
-              
-            status.getDetails().forEach((key, value) -> 
-                sb.append(String.format("│  ├─ %s: %s\n", key, value))
-            );
-        });
         
-        // 현재 서비스 상태 추가
-        sb.append(String.format("\n📌 Current Distribution Service\n"))
-          .append(String.format("├─ Service: %s\n", currentServiceName))
-          .append(String.format("└─ Distributing: %s\n", isDistributing));
-        
-        log.info(sb.toString());
+        log.info("📌 Current Service: {} (Distributing: {})", 
+            currentServiceName, isDistributing);
     }
     
     public Map<String, InfrastructureStatus> getCurrentStatus() {

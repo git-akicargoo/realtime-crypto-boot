@@ -14,6 +14,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Component;
 
+import com.example.boot.common.logging.ScheduledLogger;
 import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeData;
 import com.example.boot.exchange.layer4_distribution.common.health.DistributionStatus;
 import com.example.boot.exchange.layer4_distribution.common.health.HealthCheckable;
@@ -33,6 +34,7 @@ public class KafkaHealthIndicator implements HealthCheckable {
     private final String topic;
     private final ZookeeperHealthIndicator zookeeperHealthIndicator;
     private final String bootstrapServers;
+    private final ScheduledLogger scheduledLogger;
 
     public KafkaHealthIndicator(
         @Autowired(required = false) KafkaTemplate<String, StandardExchangeData> kafkaTemplate,
@@ -40,7 +42,8 @@ public class KafkaHealthIndicator implements HealthCheckable {
         DistributionStatus distributionStatus,
         @Value("${spring.kafka.topics.trades}") String topic,
         ZookeeperHealthIndicator zookeeperHealthIndicator,
-        @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers
+        @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
+        ScheduledLogger scheduledLogger
     ) {
         this.kafkaTemplate = kafkaTemplate;
         this.leaderElectionService = leaderElectionService;
@@ -48,6 +51,7 @@ public class KafkaHealthIndicator implements HealthCheckable {
         this.topic = topic;
         this.zookeeperHealthIndicator = zookeeperHealthIndicator;
         this.bootstrapServers = bootstrapServers;
+        this.scheduledLogger = scheduledLogger;
     }
 
     @Override
@@ -68,13 +72,13 @@ public class KafkaHealthIndicator implements HealthCheckable {
                 
                 try (AdminClient adminClient = AdminClient.create(props)) {
                     adminClient.listTopics().names().get(3, TimeUnit.SECONDS);
-                    log.info("Successfully connected to Kafka at {}", bootstrapServers);
+                    scheduledLogger.scheduleLog(log, "Successfully connected to Kafka at {}", bootstrapServers);
                     return true;
                 }
             }
             
             kafkaTemplate.getProducerFactory().createProducer().partitionsFor(topic);
-            log.info("Kafka is available via KafkaTemplate at {}", bootstrapServers);
+            scheduledLogger.scheduleLog(log, "Kafka is available via KafkaTemplate at {}", bootstrapServers);
             return true;
         } catch (Exception e) {
             log.debug("Kafka is not available at {}: {}", bootstrapServers, e.getMessage());

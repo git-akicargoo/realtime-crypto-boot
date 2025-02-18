@@ -20,7 +20,7 @@ zookeeper:
 infrastructure:
   health-check:
     enabled: true
-    interval: 5000  # 5초마다 체크
+    interval: 10000  # 5초마다 체크
     logging:
       enabled: true
       level: DEBUG  # 로깅 레벨을 DEBUG로 변경
@@ -66,6 +66,8 @@ exchange:
         - KRW    
 
 logging:
+  scheduled:
+    default-interval: 10000  # 10초 (밀리초 단위)
   pattern:
     console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr([%logger{0}]){cyan} %clr(:){faint} %m%n"
   level:
@@ -79,9 +81,13 @@ logging:
     # 기타 로깅 설정
     com.example.boot.exchange.layer4_distribution.kafka: INFO
     com.example.boot.exchange.layer4_distribution.direct: INFO
-    org.apache.kafka: ERROR        # WARN -> ERROR로 변경
-    org.apache.zookeeper: ERROR    # WARN -> ERROR로 변경
-    org.apache.curator: ERROR      # WARN -> ERROR로 변경
+    # Kafka 관련 로깅 레벨 조정
+    org.apache.kafka.clients.NetworkClient: ERROR
+    org.apache.kafka.clients.consumer.internals.ConsumerCoordinator: ERROR
+    org.apache.kafka.clients.Metadata: ERROR
+    org.apache.kafka: ERROR        # 전체 Kafka 로깅
+    org.apache.zookeeper: ERROR    # Zookeeper 로깅
+    org.apache.curator: ERROR      # Curator 로깅
     org.springframework: WARN
 
 ---
