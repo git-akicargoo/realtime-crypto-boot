@@ -24,6 +24,12 @@ public class DataFlowMonitor {
     private final AtomicLong kafkaMessagesReceived = new AtomicLong(0);
     private final AtomicLong clientMessagesSent = new AtomicLong(0);
     
+    // 이전 측정값 저장용 변수들 추가
+    private final AtomicLong lastExchangeDataReceived = new AtomicLong(0);
+    private final AtomicLong lastKafkaMessagesSent = new AtomicLong(0);
+    private final AtomicLong lastKafkaMessagesReceived = new AtomicLong(0);
+    private final AtomicLong lastClientMessagesSent = new AtomicLong(0);
+    
     private final LeaderElectionService leaderElectionService;
     private final DistributionStatus distributionStatus;
     private final KafkaHealthIndicator healthIndicator;
@@ -55,7 +61,9 @@ public class DataFlowMonitor {
             StringBuilder sb = new StringBuilder();
             sb.append("\n📊 System Status\n");
             
-            // 현재 서비스 타입을 확인하여 모드 결정
+            // 모니터링 간격을 초 단위로 변환
+            long intervalSeconds = monitoringInterval / 1000;
+            
             boolean isKafkaMode = healthIndicator != null && 
                                 zookeeperHealthIndicator != null && 
                                 healthIndicator.isAvailable() && 
@@ -63,22 +71,36 @@ public class DataFlowMonitor {
             
             // Direct 모드일 때
             if (!isKafkaMode) {
-                long received = exchangeDataReceived.get();
-                long sent = clientMessagesSent.get();
+                long currentReceived = exchangeDataReceived.get();
+                long currentSent = clientMessagesSent.get();
+                
+                long receivedDelta = currentReceived - lastExchangeDataReceived.getAndSet(currentReceived);
+                long sentDelta = currentSent - lastClientMessagesSent.getAndSet(currentSent);
                 
                 sb.append("├─ Mode: DIRECT\n");
-                sb.append(String.format("├─ Exchange Data Received: %d\n", received));
-                sb.append(String.format("├─ Clients Connected: %d\n", sent > 0 ? 1 : 0));
-                sb.append(String.format("└─ Client Messages Sent: %d", sent));
+                sb.append(String.format("├─ Exchange Data (Last %ds): +%d\n", intervalSeconds, receivedDelta));
+                sb.append(String.format("├─ Clients Connected: %d\n", sentDelta > 0 ? 1 : 0));
+                sb.append(String.format("└─ Client Messages (Last %ds): +%d", intervalSeconds, sentDelta));
             } 
             // Kafka 모드일 때
             else {
                 String role = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
+                
+                long currentSent = kafkaMessagesSent.get();
+                long currentReceived = kafkaMessagesReceived.get();
+                
+                long sentDelta = currentSent - lastKafkaMessagesSent.getAndSet(currentSent);
+                long receivedDelta = currentReceived - lastKafkaMessagesReceived.getAndSet(currentReceived);
+                long lag = currentSent - currentReceived;
+                
                 sb.append("├─ Mode: KAFKA\n");
                 sb.append(String.format("├─ Role: %s\n", role));
-                sb.append(String.format("├─ Kafka Messages: Sent=%d, Received=%d\n", 
-                    kafkaMessagesSent.get(), kafkaMessagesReceived.get()));
-                sb.append(String.format("└─ Client Messages Sent: %d", clientMessagesSent.get()));
+                sb.append(String.format("├─ Kafka Messages (Last %ds): Sent=+%d, Received=+%d (Lag: %d)\n", 
+                    intervalSeconds, sentDelta, receivedDelta, lag));
+                
+                long currentClientSent = clientMessagesSent.get();
+                long clientSentDelta = currentClientSent - lastClientMessagesSent.getAndSet(currentClientSent);
+                sb.append(String.format("└─ Client Messages (Last %ds): +%d", intervalSeconds, clientSentDelta));
             }
             
             log.info(sb.toString());
