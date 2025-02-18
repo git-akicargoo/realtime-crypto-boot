@@ -84,11 +84,10 @@ public class KafkaConfig {
         consumerProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, "1000");  // 재시도 간격
         consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, "1000");  // 재연결 간격
         consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, "5000");  // 최대 재연결 간격
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");  // 최신 메시지부터 수신
 
         return ReceiverOptions.<String, StandardExchangeData>create(consumerProps)
-            .subscription(Collections.singletonList(topic))
-            .withKeyDeserializer(new StringDeserializer())
-            .withValueDeserializer(new JsonDeserializer<>(StandardExchangeData.class));
+            .subscription(Collections.singletonList(topic));
     }
 
     @Bean
@@ -101,7 +100,7 @@ public class KafkaConfig {
     @Bean
     public NewTopic exchangeTopic() {
         return TopicBuilder.name(topic)
-                .partitions(1)
+                .partitions(1)     // 단일 파티션으로 수정
                 .replicas(1)
                 .build();
     }

@@ -5,7 +5,7 @@ spring:
     enabled: false  # Kafka 비활성화로 시작
     bootstrap-servers: localhost:9092
     consumer:
-      group-id: exchange-group
+      group-id: exchange-group-${random.uuid}  # 각 인스턴스마다 고유한 group-id 할당
     topics:
       trades: exchange.trades
     admin:
