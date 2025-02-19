@@ -1,5 +1,7 @@
 package com.example.boot.exchange.layer4_distribution.kafka.service;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -10,6 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.example.boot.common.logging.ScheduledLogger;
+import com.example.boot.common.session.registry.SessionRegistry;
 import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeData;
 import com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationService;
 import com.example.boot.exchange.layer4_distribution.common.event.LeaderElectionEvent;
@@ -19,6 +22,7 @@ import com.example.boot.exchange.layer4_distribution.common.service.Distribution
 import com.example.boot.exchange.layer4_distribution.kafka.health.KafkaHealthIndicator;
 
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -33,13 +37,15 @@ public class KafkaDistributionService implements DistributionService {
     private final KafkaReceiver<String, StandardExchangeData> kafkaReceiver;
     private final KafkaHealthIndicator healthIndicator;
     private final String topic;
-    private final ConcurrentHashMap<String, Sinks.Many<StandardExchangeData>> clientSinks;
+    public final ConcurrentHashMap<String, Sinks.Many<StandardExchangeData>> clientSinks;
     private final AtomicBoolean isDistributing;
     private final LeaderElectionService leaderElectionService;
     private final DistributionStatus distributionStatus;
     private final DataFlowMonitor dataFlowMonitor;
     private final ScheduledLogger scheduledLogger;
     private volatile Flux<StandardExchangeData> sharedFlux;
+    private final SessionRegistry sessionRegistry;
+    private volatile Disposable disposable;
 
     public KafkaDistributionService(
         ExchangeDataIntegrationService integrationService,
@@ -50,7 +56,8 @@ public class KafkaDistributionService implements DistributionService {
         @Value("${spring.kafka.topics.trades}") String topic,
         DistributionStatus distributionStatus,
         DataFlowMonitor dataFlowMonitor,
-        ScheduledLogger scheduledLogger
+        ScheduledLogger scheduledLogger,
+        SessionRegistry sessionRegistry
     ) {
         this.integrationService = integrationService;
         this.kafkaTemplate = kafkaTemplate;
@@ -63,6 +70,7 @@ public class KafkaDistributionService implements DistributionService {
         this.distributionStatus = distributionStatus;
         this.dataFlowMonitor = dataFlowMonitor;
         this.scheduledLogger = scheduledLogger;
+        this.sessionRegistry = sessionRegistry;
         log.info("Initialized Kafka distribution service with topic: {}", topic);
     }
 
@@ -125,7 +133,7 @@ public class KafkaDistributionService implements DistributionService {
                 .filter(data -> isDistributing() && healthIndicator.isAvailable())
                 .doOnNext(data -> {
                     if (!healthIndicator.isAvailable()) {
-                        log.warn("Kafka is not available, skipping message");
+                        log.debug("Skipping message: Kafka not available");
                         return;
                     }
                     try {
@@ -134,13 +142,13 @@ public class KafkaDistributionService implements DistributionService {
                         kafkaTemplate.send(topic, data.getExchange(), data)
                             .whenComplete((result, ex) -> {
                                 if (ex != null) {
-                                    log.error("Failed to send message to Kafka", ex);
+                                    log.debug("Message queued but Kafka unavailable - Exchange: {}", data.getExchange());
                                 } else {
                                     dataFlowMonitor.incrementKafkaSent();
                                 }
                             });
                     } catch (Exception e) {
-                        log.error("Error sending to Kafka", e);
+                        log.debug("Unable to process message while Kafka unavailable - Exchange: {}", data.getExchange());
                     }
                 });
         }
@@ -171,18 +179,14 @@ public class KafkaDistributionService implements DistributionService {
     @Override
     public Mono<Void> stopDistribution() {
         return Mono.fromRunnable(() -> {
-            log.info("Stopping Kafka distribution service");
+            // clientSinks를 clear하지 않도록 수정
             isDistributing.set(false);
             distributionStatus.setDistributing(false);
-            
-            // 기존 Flux 구독 취소
-            if (sharedFlux != null) {
-                sharedFlux = null;
+            if (disposable != null) {
+                disposable.dispose();
             }
-            
-            clientSinks.clear();
             log.info("Kafka distribution service stopped");
-        }).then();
+        });
     }
 
     @Override
@@ -190,14 +194,35 @@ public class KafkaDistributionService implements DistributionService {
         return isDistributing.get();
     }
 
+    @Override
+    public Map<String, Sinks.Many<StandardExchangeData>> getActiveSinks() {
+        return new HashMap<>(clientSinks);
+    }
+
+    @Override
+    public void restoreSinks(Map<String, Sinks.Many<StandardExchangeData>> sinks) {
+        clientSinks.clear();
+        clientSinks.putAll(sinks);
+        log.info("Restored {} client sinks", sinks.size());
+    }
+
     private void broadcastToClients(StandardExchangeData data) {
         int clientCount = clientSinks.size();
         if (clientCount > 0) {
             clientSinks.forEach((clientId, sink) -> {
-                sink.tryEmitNext(data);
-                dataFlowMonitor.incrementClientSent();
-                log.debug("📨 Sent to client {}: Exchange={}, Price={}", 
-                    clientId, data.getExchange(), data.getPrice());
+                // 세션이 유효한 경우에만 데이터 전송
+                if (sessionRegistry.getSession(clientId) != null) {
+                    boolean success = sink.tryEmitNext(data).isSuccess();
+                    if (success) {
+                        dataFlowMonitor.incrementClientSent();
+                        log.debug("📨 Sent to client {}: Exchange={}, Price={}", 
+                            clientId, data.getExchange(), data.getPrice());
+                    }
+                } else {
+                    // 유효하지 않은 세션의 Sink 제거
+                    clientSinks.remove(clientId);
+                    log.debug("Removed invalid client sink: {}", clientId);
+                }
             });
             scheduledLogger.scheduleLog(log, "📢 Active clients: {}", clientCount);
         } else {
@@ -233,5 +258,10 @@ public class KafkaDistributionService implements DistributionService {
             // 리더 역할 시작
             startDistribution().subscribe();
         }
+    }
+
+    public void addClientSink(String clientId, Sinks.Many<StandardExchangeData> sink) {
+        clientSinks.put(clientId, sink);
+        log.info("Added client sink for client ID: {}", clientId);
     }
 } 

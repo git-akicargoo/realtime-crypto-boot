@@ -8,11 +8,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.example.boot.common.session.registry.SessionRegistry;
 import com.example.boot.exchange.layer4_distribution.common.health.DistributionStatus;
 import com.example.boot.exchange.layer4_distribution.kafka.health.KafkaHealthIndicator;
 import com.example.boot.exchange.layer4_distribution.kafka.health.ZookeeperHealthIndicator;
 import com.example.boot.exchange.layer4_distribution.kafka.service.LeaderElectionService;
-import com.example.boot.web.websocket.handler.FrontendWebSocketHandler;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +35,7 @@ public class DataFlowMonitor {
     private final DistributionStatus distributionStatus;
     private final KafkaHealthIndicator healthIndicator;
     private final ZookeeperHealthIndicator zookeeperHealthIndicator;
+    private final SessionRegistry sessionRegistry;
     
     @Value("${infrastructure.monitoring.data-flow.logging.interval:10000}")
     private long monitoringInterval;
@@ -43,12 +44,14 @@ public class DataFlowMonitor {
         LeaderElectionService leaderElectionService,
         DistributionStatus distributionStatus,
         @Autowired(required = false) KafkaHealthIndicator healthIndicator,
-        @Autowired(required = false) ZookeeperHealthIndicator zookeeperHealthIndicator
+        @Autowired(required = false) ZookeeperHealthIndicator zookeeperHealthIndicator,
+        SessionRegistry sessionRegistry
     ) {
         this.leaderElectionService = leaderElectionService;
         this.distributionStatus = distributionStatus;
         this.healthIndicator = healthIndicator;
         this.zookeeperHealthIndicator = zookeeperHealthIndicator;
+        this.sessionRegistry = sessionRegistry;
     }
     
     @Scheduled(fixedRateString = "${infrastructure.monitoring.data-flow.logging.interval:10000}")
@@ -77,7 +80,7 @@ public class DataFlowMonitor {
                 long receivedDelta = currentReceived - lastExchangeDataReceived.getAndSet(currentReceived);
                 long sentDelta = currentSent - lastClientMessagesSent.getAndSet(currentSent);
                 
-                int activeClients = FrontendWebSocketHandler.getActiveSessionCount();  // 정적 메서드 호출
+                int activeClients = sessionRegistry.getActiveSessionCount();
                 
                 sb.append("├─ Mode: DIRECT\n");
                 sb.append(String.format("├─ Exchange Data (Last %ds): +%d\n", intervalSeconds, receivedDelta));
@@ -95,7 +98,7 @@ public class DataFlowMonitor {
                 long receivedDelta = currentReceived - lastKafkaMessagesReceived.getAndSet(currentReceived);
                 long lag = currentSent - currentReceived;
                 
-                int activeClients = FrontendWebSocketHandler.getActiveSessionCount();  // 정적 메서드 호출
+                int activeClients = sessionRegistry.getActiveSessionCount();
                 
                 sb.append("├─ Mode: KAFKA\n");
                 sb.append(String.format("├─ Role: %s\n", role));

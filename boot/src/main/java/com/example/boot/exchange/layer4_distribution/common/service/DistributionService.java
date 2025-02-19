@@ -1,9 +1,12 @@
 package com.example.boot.exchange.layer4_distribution.common.service;
 
+import java.util.Map;
+
 import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeData;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 public interface DistributionService {
     /**
@@ -25,4 +28,8 @@ public interface DistributionService {
      * 현재 배포 상태 확인
      */
     boolean isDistributing();
+    
+    // 새로 추가되는 메서드들
+    Map<String, Sinks.Many<StandardExchangeData>> getActiveSinks();
+    void restoreSinks(Map<String, Sinks.Many<StandardExchangeData>> sinks);
 } 

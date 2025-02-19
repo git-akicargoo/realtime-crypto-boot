@@ -1,10 +1,13 @@
 package com.example.boot.exchange.layer4_distribution.direct.service;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.stereotype.Service;
 
+import com.example.boot.common.session.registry.SessionRegistry;
 import com.example.boot.exchange.layer3_data_converter.model.StandardExchangeData;
 import com.example.boot.exchange.layer3_data_converter.service.ExchangeDataIntegrationService;
 import com.example.boot.exchange.layer4_distribution.common.health.DistributionStatus;
@@ -24,63 +27,54 @@ public class DirectDistributionService implements DistributionService {
     private final AtomicBoolean isDistributing;
     private final DistributionStatus distributionStatus;
     private final DataFlowMonitor dataFlowMonitor;
+    private final SessionRegistry sessionRegistry;
     
     public DirectDistributionService(
         ExchangeDataIntegrationService integrationService,
         DistributionStatus distributionStatus,
-        DataFlowMonitor dataFlowMonitor
+        DataFlowMonitor dataFlowMonitor,
+        SessionRegistry sessionRegistry
     ) {
         this.integrationService = integrationService;
         this.clientSinks = new ConcurrentHashMap<>();
         this.isDistributing = new AtomicBoolean(false);
         this.distributionStatus = distributionStatus;
         this.dataFlowMonitor = dataFlowMonitor;
+        this.sessionRegistry = sessionRegistry;
     }
     
     @Override
     public Flux<StandardExchangeData> startDistribution() {
         if (!isDistributing.compareAndSet(false, true)) {
-            log.info("Distribution already running, returning existing distribution");
-            return getExistingDistribution();
+            log.info("Distribution already running");
+            return Flux.empty();  // 이미 실행 중이면 빈 Flux 반환
         }
         
         log.info("🚀 Starting direct distribution");
         distributionStatus.setDistributing(true);
         
         return integrationService.subscribe()
-            .doOnSubscribe(subscription -> {
-                log.info("✅ Direct distribution subscribed and active");
-            })
             .doOnNext(data -> {
                 dataFlowMonitor.incrementExchangeData();
-                log.debug("📥 Received from exchange: {}", data.getExchange());
                 broadcastToClients(data);
             })
-            .doOnError(error -> {
-                log.error("❌ Error in distribution: ", error);
+            .doOnError(e -> {
+                log.error("Error in distribution: ", e);
                 isDistributing.set(false);
                 distributionStatus.setDistributing(false);
-            })
-            .doOnCancel(() -> {
-                log.info("Distribution cancelled");
-                isDistributing.set(false);
-                distributionStatus.setDistributing(false);
-            })
-            .doOnComplete(() -> {
-                log.info("Distribution completed");
-                isDistributing.set(false);
-                distributionStatus.setDistributing(false);
-            })
-            .share();
+            });
     }
     
     @Override
     public Mono<Void> sendToClient(String clientId, StandardExchangeData data) {
         Sinks.Many<StandardExchangeData> sink = clientSinks.get(clientId);
-        if (sink != null) {
-            return Mono.fromRunnable(() -> 
-                sink.tryEmitNext(data)
-            );
+        if (sink != null && sessionRegistry.getSession(clientId) != null) {
+            boolean success = sink.tryEmitNext(data).isSuccess();
+            if (success) {
+                dataFlowMonitor.incrementClientSent();
+                log.debug("📨 Sent to client {}: Exchange={}, Price={}", 
+                    clientId, data.getExchange(), data.getPrice());
+            }
         }
         return Mono.empty();
     }
@@ -100,27 +94,40 @@ public class DirectDistributionService implements DistributionService {
         return isDistributing.get();
     }
     
+    @Override
+    public Map<String, Sinks.Many<StandardExchangeData>> getActiveSinks() {
+        return new HashMap<>(clientSinks);
+    }
+
+    @Override
+    public void restoreSinks(Map<String, Sinks.Many<StandardExchangeData>> sinks) {
+        clientSinks.clear();
+        clientSinks.putAll(sinks);
+        log.info("Restored {} client sinks", sinks.size());
+    }
+    
     private void broadcastToClients(StandardExchangeData data) {
         int clientCount = clientSinks.size();
         if (clientCount > 0) {
             clientSinks.forEach((clientId, sink) -> {
-                boolean success = sink.tryEmitNext(data).isSuccess();
-                if (success) {
-                    dataFlowMonitor.incrementClientSent();
-                    log.debug("📨 Sent to client {}: Exchange={}, Price={}", 
-                        clientId, data.getExchange(), data.getPrice());
+                if (sessionRegistry.getSession(clientId) != null) {
+                    boolean success = sink.tryEmitNext(data).isSuccess();
+                    if (success) {
+                        dataFlowMonitor.incrementClientSent();
+                        log.debug("📨 Sent to client {}: Exchange={}, Price={}", 
+                            clientId, data.getExchange(), data.getPrice());
+                    }
+                } else {
+                    clientSinks.remove(clientId);
+                    log.debug("Removed invalid client sink: {}", clientId);
                 }
             });
             log.debug("📢 Broadcasted to {} clients", clientCount);
         }
     }
-    
-    private Flux<StandardExchangeData> getExistingDistribution() {
-        String clientId = "client-" + System.currentTimeMillis();
-        Sinks.Many<StandardExchangeData> sink = Sinks.many().multicast().onBackpressureBuffer();
+
+    public void addClientSink(String clientId, Sinks.Many<StandardExchangeData> sink) {
         clientSinks.put(clientId, sink);
-        
-        return sink.asFlux()
-            .doFinally(signalType -> clientSinks.remove(clientId));
+        log.info("Added client sink for client ID: {}", clientId);
     }
 } 
