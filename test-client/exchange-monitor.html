@@ -219,6 +219,7 @@
             }
 
             ws = new WebSocket('ws://localhost:8080/ws/exchange');
+            <!-- ws = new WebSocket('ws://' + window.location.hostname + '/ws/exchange'); -->
             
             ws.onopen = () => {
                 document.getElementById('status').textContent = 'Connected';

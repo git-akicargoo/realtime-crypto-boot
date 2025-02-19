@@ -127,8 +127,9 @@ public class KafkaDistributionService implements DistributionService {
         String role = leaderElectionService.isLeader() ? "LEADER" : "FOLLOWER";
         scheduledLogger.scheduleLog(log, "Creating distribution flux - Role: {}", role);
         
-        if (leaderElectionService.isLeader()) {
-            return integrationService.subscribe()
+        // 리더인 경우: 데이터 수집 및 Kafka로 전송
+        Flux<StandardExchangeData> leaderFlux = leaderElectionService.isLeader() ?
+            integrationService.subscribe()
                 .distinct()
                 .filter(data -> isDistributing() && healthIndicator.isAvailable())
                 .doOnNext(data -> {
@@ -137,7 +138,7 @@ public class KafkaDistributionService implements DistributionService {
                         return;
                     }
                     try {
-                        scheduledLogger.scheduleLog(log, "📤 [LEADER] Processing messages - Exchange: {}, Price: {}", 
+                        scheduledLogger.scheduleLog(log, "📤 [LEADER] Publishing to Kafka - Exchange: {}, Price: {}", 
                             data.getExchange(), data.getPrice());
                         kafkaTemplate.send(topic, data.getExchange(), data)
                             .whenComplete((result, ex) -> {
@@ -150,19 +151,22 @@ public class KafkaDistributionService implements DistributionService {
                     } catch (Exception e) {
                         log.debug("Unable to process message while Kafka unavailable - Exchange: {}", data.getExchange());
                     }
-                });
-        }
+                }) : Flux.empty();
 
-        return kafkaReceiver.receive()
+        // 모든 인스턴스(리더와 팔로워)가 Kafka에서 데이터를 받아 클라이언트에게 전송
+        Flux<StandardExchangeData> consumerFlux = kafkaReceiver.receive()
             .filter(record -> isDistributing() && healthIndicator.isAvailable())
             .map(record -> {
                 StandardExchangeData data = record.value();
-                scheduledLogger.scheduleLog(log, "📥 [{}] Processing messages - Exchange: {}, Price: {}", 
+                scheduledLogger.scheduleLog(log, "📥 [{}] Received from Kafka - Exchange: {}, Price: {}", 
                     role, data.getExchange(), data.getPrice());
                 dataFlowMonitor.incrementKafkaReceived();
                 return data;
             })
             .doOnNext(this::broadcastToClients);
+
+        // 리더와 컨슈머 Flux 결합
+        return Flux.merge(leaderFlux, consumerFlux);
     }
 
     @Override
