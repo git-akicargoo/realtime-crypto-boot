@@ -12,6 +12,7 @@ import com.example.boot.exchange.layer4_distribution.common.health.DistributionS
 import com.example.boot.exchange.layer4_distribution.kafka.health.KafkaHealthIndicator;
 import com.example.boot.exchange.layer4_distribution.kafka.health.ZookeeperHealthIndicator;
 import com.example.boot.exchange.layer4_distribution.kafka.service.LeaderElectionService;
+import com.example.boot.web.websocket.handler.FrontendWebSocketHandler;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -58,8 +59,7 @@ public class DataFlowMonitor {
                 return;
             }
 
-            StringBuilder sb = new StringBuilder();
-            sb.append("\n📊 System Status\n");
+            StringBuilder sb = new StringBuilder("\n📊 System Status\n");
             
             // 모니터링 간격을 초 단위로 변환
             long intervalSeconds = monitoringInterval / 1000;
@@ -77,9 +77,11 @@ public class DataFlowMonitor {
                 long receivedDelta = currentReceived - lastExchangeDataReceived.getAndSet(currentReceived);
                 long sentDelta = currentSent - lastClientMessagesSent.getAndSet(currentSent);
                 
+                int activeClients = FrontendWebSocketHandler.getActiveSessionCount();  // 정적 메서드 호출
+                
                 sb.append("├─ Mode: DIRECT\n");
                 sb.append(String.format("├─ Exchange Data (Last %ds): +%d\n", intervalSeconds, receivedDelta));
-                sb.append(String.format("├─ Clients Connected: %d\n", sentDelta > 0 ? 1 : 0));
+                sb.append(String.format("├─ Clients Connected: %d\n", activeClients));
                 sb.append(String.format("└─ Client Messages (Last %ds): +%d", intervalSeconds, sentDelta));
             } 
             // Kafka 모드일 때
@@ -93,10 +95,13 @@ public class DataFlowMonitor {
                 long receivedDelta = currentReceived - lastKafkaMessagesReceived.getAndSet(currentReceived);
                 long lag = currentSent - currentReceived;
                 
+                int activeClients = FrontendWebSocketHandler.getActiveSessionCount();  // 정적 메서드 호출
+                
                 sb.append("├─ Mode: KAFKA\n");
                 sb.append(String.format("├─ Role: %s\n", role));
                 sb.append(String.format("├─ Kafka Messages (Last %ds): Sent=+%d, Received=+%d (Lag: %d)\n", 
                     intervalSeconds, sentDelta, receivedDelta, lag));
+                sb.append(String.format("├─ Clients Connected: %d\n", activeClients));
                 
                 long currentClientSent = clientMessagesSent.get();
                 long clientSentDelta = currentClientSent - lastClientMessagesSent.getAndSet(currentClientSent);
