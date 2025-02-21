@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crypto Dashboard</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --accent-color: #3b82f6;
+            --border-color: #334155;
+            --up-color: #10b981;
+            --down-color: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .market-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .summary-card h3 {
+            margin: 0 0 10px 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .summary-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .currency-selector {
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: var(--accent-color);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        button.active {
+            background: #2563eb;
+        }
+
+        .crypto-table {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: right;
+            padding: 15px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th:first-child,
+        th:nth-child(2) {
+            text-align: left;
+        }
+
+        td {
+            padding: 15px;
+            text-align: right;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td:first-child,
+        td:nth-child(2) {
+            text-align: left;
+        }
+
+        .asset {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .asset-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .asset-name {
+            font-weight: 500;
+        }
+
+        .asset-symbol {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        .price-up { color: var(--up-color); }
+        .price-down { color: var(--down-color); }
+
+        #status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        #status.connected {
+            background: var(--up-color);
+            color: white;
+        }
+
+        #status.disconnected {
+            background: var(--down-color);
+            color: white;
+        }
+
+        /* 실제 데이터와 변환된 데이터 구분을 위한 스타일 */
+        .price-real {
+            background: var(--bg-secondary);  /* 실제 데이터 */
+        }
+        
+        .price-converted {
+            background: rgba(59, 130, 246, 0.1);  /* 변환된 데이터 - 약간 파란 배경 */
+            border-radius: 4px;
+            padding: 2px 6px;
+        }
+
+        /* 가격 비교 섹션 스타일 */
+        .price-comparison {
+            background-color: rgba(51, 65, 85, 0.4);  /* 더 어두운 청회색 */
+        }
+
+        .price-comparison th {
+            color: #94a3b8;  /* 밝은 회색 헤더 텍스트 */
+            border-left: 1px solid var(--border-color);
+            background-color: rgba(51, 65, 85, 0.6);  /* 헤더 배경 살짝 더 진하게 */
+        }
+
+        .price-comparison td {
+            background-color: rgba(51, 65, 85, 0.4);  /* 데이터 셀 배경 */
+            border-left: 1px solid var(--border-color);
+            color: #e2e8f0;  /* 데이터 텍스트 색상 */
+        }
+
+        /* 가격 차이 강조 */
+        .price-comparison td:last-child {
+            font-weight: 500;  /* 가격 차이 컬럼 살짝 강조 */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="controls">
+            <span id="status" class="disconnected">Disconnected</span>
+            <button onclick="connect()" id="connectBtn">Connect</button>
+            <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
+            <div class="currency-selector">
+                <button onclick="setBaseCurrency('KRW')" class="active">KRW</button>
+                <button onclick="setBaseCurrency('USDT')">USDT</button>
+                <button onclick="setBaseCurrency('BTC')">BTC</button>
+            </div>
+        </div>
+
+        <div class="market-summary">
+            <div class="summary-card">
+                <h3>Total Market Cap</h3>
+                <div class="value" id="totalMarketCap">-</div>
+            </div>
+            <div class="summary-card">
+                <h3>24h Volume</h3>
+                <div class="value" id="total24hVolume">-</div>
+            </div>
+            <div class="summary-card">
+                <h3>BTC Dominance</h3>
+                <div class="value" id="btcDominance">-</div>
+            </div>
+        </div>
+
+        <div class="crypto-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Asset</th>
+                        <th>Upbit</th>
+                        <th>Bithumb</th>
+                        <th>Binance</th>
+                        <th>24h Change</th>
+                        <th>24h Volume</th>
+                        <th class="price-comparison">Low Exchange</th>
+                        <th class="price-comparison">Low Price</th>
+                        <th class="price-comparison">High Exchange</th>
+                        <th class="price-comparison">High Price</th>
+                        <th class="price-comparison">Price Diff</th>
+                    </tr>
+                </thead>
+                <tbody id="cryptoTableBody">
+                    <!-- 데이터가 동적으로 추가됨 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentBaseCurrency = 'KRW';
+        let priceData = {};
+        let lastPrices = {};
+
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) return;
+
+            priceData = {};  // 연결 시작할 때만 초기화
+            ws = new WebSocket('ws://localhost:8080/ws/exchange');
+            
+            ws.onopen = () => {
+                document.getElementById('status').textContent = 'Connected';
+                document.getElementById('status').className = 'connected';
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    processExchangeData(data);
+                } catch (e) {
+                    console.error('Error parsing message:', e);
+                }
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('status').textContent = 'Disconnected';
+                document.getElementById('status').className = 'disconnected';
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+            };
+        }
+
+        function disconnect() {
+            if (ws) ws.close();
+        }
+
+        function setBaseCurrency(currency) {
+            currentBaseCurrency = currency;
+            document.querySelectorAll('.currency-selector button').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent === currency) btn.classList.add('active');
+            });
+            updatePriceTable();
+        }
+
+        function processExchangeData(data) {
+            const currency = data.currencyPair.symbol;
+            const base = data.currencyPair.quoteCurrency;
+            const pair = `${currency}/${base}`;
+            const exchange = data.exchange.toLowerCase();
+            
+            // 기존 데이터 유지하면서 업데이트
+            if (!priceData[pair]) {
+                priceData[pair] = {
+                    upbit: null,
+                    bithumb: null,
+                    binance: null,
+                    priceChangePercents: {
+                        upbit: null,
+                        bithumb: null,
+                        binance: null
+                    },
+                    volume24h: null,
+                    lastUpdate: Date.now()
+                };
+            }
+
+            // 해당 거래소의 데이터만 업데이트
+            priceData[pair][exchange] = data.price;
+            if (data.priceChangePercent !== null && data.priceChangePercent !== undefined) {
+                priceData[pair].priceChangePercents[exchange] = data.priceChangePercent;
+            }
+            if (data.volume24h !== null && data.volume24h !== undefined) {
+                priceData[pair].volume24h = data.volume24h;
+            }
+            
+            // 바이낸스 USDT -> KRW 변환
+            if (exchange === 'binance' && base === 'USDT') {
+                const btcKrwPrice = priceData['BTC/KRW']?.['upbit'];
+                const btcUsdtPrice = priceData['BTC/USDT']?.['binance'];
+                
+                if (btcKrwPrice && btcUsdtPrice) {
+                    const usdtKrwRate = btcKrwPrice / btcUsdtPrice;
+                    const krwPrice = data.price * usdtKrwRate;
+                    const krwPair = `${currency}/KRW`;
+                    
+                    if (!priceData[krwPair]) {
+                        priceData[krwPair] = {
+                            upbit: null,
+                            bithumb: null,
+                            binance: null,
+                            priceChangePercents: {
+                                upbit: null,
+                                bithumb: null,
+                                binance: null
+                            },
+                            volume24h: data.volume24h,
+                            lastUpdate: Date.now()
+                        };
+                    }
+                    priceData[krwPair].binance = krwPrice;
+                    priceData[krwPair].binanceConverted = true;
+                    // 등락률 정보 복사
+                    priceData[krwPair].priceChangePercents.binance = data.priceChangePercent;
+                }
+            }
+            
+            // 빗썸 KRW -> USDT/BTC 변환
+            if (exchange === 'bithumb' && base === 'KRW') {
+                // USDT 변환
+                const btcKrwPrice = priceData['BTC/KRW']?.['bithumb'];
+                const btcUsdtPrice = priceData['BTC/USDT']?.['binance'];
+                
+                if (btcKrwPrice && btcUsdtPrice) {
+                    const krwUsdtRate = btcUsdtPrice / btcKrwPrice;
+                    const usdtPrice = data.price * krwUsdtRate;
+                    const usdtPair = `${currency}/USDT`;
+                    
+                    if (!priceData[usdtPair]) {
+                        priceData[usdtPair] = {
+                            upbit: null,
+                            bithumb: null,
+                            binance: null,
+                            priceChangePercents: {
+                                upbit: null,
+                                bithumb: null,
+                                binance: null
+                            },
+                            volume24h: data.volume24h,
+                            lastUpdate: Date.now()
+                        };
+                    }
+                    priceData[usdtPair].bithumb = usdtPrice;
+                    priceData[usdtPair].bithumbConverted = true;
+                    // 등락률 정보 복사
+                    priceData[usdtPair].priceChangePercents.bithumb = data.priceChangePercent;
+                }
+
+                // BTC 변환
+                if (btcKrwPrice) {
+                    const btcPrice = data.price / btcKrwPrice;
+                    const btcPair = `${currency}/BTC`;
+                    
+                    if (!priceData[btcPair]) {
+                        priceData[btcPair] = {
+                            upbit: null,
+                            bithumb: null,
+                            binance: null,
+                            priceChangePercents: {
+                                upbit: null,
+                                bithumb: null,
+                                binance: null
+                            },
+                            volume24h: data.volume24h,
+                            lastUpdate: Date.now()
+                        };
+                    }
+                    priceData[btcPair].bithumb = btcPrice;
+                    priceData[btcPair].bithumbConverted = true;
+                    // 등락률 정보 복사
+                    priceData[btcPair].priceChangePercents.bithumb = data.priceChangePercent;
+                }
+            }
+
+            updatePriceTable();
+        }
+
+        function updatePriceTable() {
+            const tbody = document.getElementById('cryptoTableBody');
+            tbody.innerHTML = '';
+
+            const relevantPairs = Object.entries(priceData)
+                .filter(([pair]) => {
+                    const [currency, base] = pair.split('/');
+                    return base === currentBaseCurrency && !(currency === 'BTC' && base === 'BTC');
+                })
+                .sort((a, b) => {
+                    const volumeA = Math.max(a[1].upbit || 0, a[1].bithumb || 0, a[1].binance || 0);
+                    const volumeB = Math.max(b[1].upbit || 0, b[1].bithumb || 0, b[1].binance || 0);
+                    return volumeB - volumeA;
+                });
+
+            relevantPairs.forEach(([pair, data], index) => {
+                const [currency] = pair.split('/');
+                const row = document.createElement('tr');
+                
+                // 거래소별 가격 데이터 준비
+                const priceData = [
+                    { exchange: 'Upbit', price: data.upbit },
+                    { exchange: 'Bithumb', price: data.bithumb },
+                    { exchange: 'Binance', price: data.binance }
+                ].filter(item => item.price !== null && item.price !== undefined);
+
+                // 최저가와 최고가 거래소 찾기
+                const lowestPrice = priceData.reduce((min, curr) => 
+                    curr.price < min.price ? curr : min, priceData[0]);
+                const highestPrice = priceData.reduce((max, curr) => 
+                    curr.price > max.price ? curr : max, priceData[0]);
+                const priceDiff = highestPrice.price - lowestPrice.price;
+                
+                const priceChangePercent = data.priceChangePercents[lowestPrice.exchange.toLowerCase()];
+                const changeClass = priceChangePercent > 0 ? 'price-up' : 'price-down';
+                const changeSign = priceChangePercent > 0 ? '+' : '';
+
+                const bithumbClass = data.bithumb && data.bithumbConverted ? 'price-converted' : '';
+                const binanceClass = data.binance && data.binanceConverted ? 'price-converted' : '';
+
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td class="asset">
+                        <div class="asset-info">
+                            <span class="asset-name">${currency}</span>
+                            <span class="asset-symbol">${currentBaseCurrency}</span>
+                        </div>
+                    </td>
+                    <td>${formatPrice(data.upbit)}</td>
+                    <td class="${bithumbClass}">${formatPrice(data.bithumb)}</td>
+                    <td class="${binanceClass}">${formatPrice(data.binance)}</td>
+                    <td class="${changeClass}">${priceChangePercent ? changeSign + priceChangePercent.toFixed(2) + '%' : '-'}</td>
+                    <td>${formatVolume(data.volume24h || 0)}</td>
+                    <td class="price-comparison">${lowestPrice.exchange}</td>
+                    <td class="price-comparison">${formatPrice(lowestPrice.price)}</td>
+                    <td class="price-comparison">${highestPrice.exchange}</td>
+                    <td class="price-comparison">${formatPrice(highestPrice.price)}</td>
+                    <td class="price-comparison">${formatPrice(priceDiff)} (${((priceDiff/lowestPrice.price)*100).toFixed(2)}%)</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            updateMarketSummary(relevantPairs);
+        }
+
+        function formatPrice(price) {
+            if (!price) return '-';
+            
+            const formatter = new Intl.NumberFormat('ko-KR', {
+                minimumFractionDigits: currentBaseCurrency === 'BTC' ? 8 : 2,
+                maximumFractionDigits: currentBaseCurrency === 'BTC' ? 8 : 2
+            });
+
+            const formattedPrice = formatter.format(price);
+            
+            // 통화 기호 추가
+            switch (currentBaseCurrency) {
+                case 'KRW':
+                    return '₩' + formattedPrice;
+                case 'USDT':
+                    return '$' + formattedPrice;
+                case 'BTC':
+                    return '₿' + formattedPrice;
+                default:
+                    return formattedPrice;
+            }
+        }
+
+        function formatVolume(volume) {
+            if (!volume) return '-';
+            if (volume >= 1e12) return (volume / 1e12).toFixed(2) + 'T';
+            if (volume >= 1e9) return (volume / 1e9).toFixed(2) + 'B';
+            if (volume >= 1e6) return (volume / 1e6).toFixed(2) + 'M';
+            return volume.toLocaleString();
+        }
+
+        function calculateVolume(data) {
+            return Math.max(data.upbit || 0, data.bithumb || 0, data.binance || 0) * 
+                   (data.upbit ? 1 : 0 + data.bithumb ? 1 : 0 + data.binance ? 1 : 0);
+        }
+
+        function updateMarketSummary(pairs) {
+            const totalVolume = pairs.reduce((sum, [, data]) => sum + calculateVolume(data), 0);
+            const btcData = pairs.find(([pair]) => pair.startsWith('BTC/'));
+            const btcPrice = btcData ? Math.max(btcData[1].upbit || 0, btcData[1].bithumb || 0, btcData[1].binance || 0) : 0;
+            const totalMarketCap = pairs.reduce((sum, [, data]) => {
+                const price = Math.max(data.upbit || 0, data.bithumb || 0, data.binance || 0);
+                return sum + price * calculateVolume(data);
+            }, 0);
+
+            document.getElementById('totalMarketCap').textContent = formatVolume(totalMarketCap);
+            document.getElementById('total24hVolume').textContent = formatVolume(totalVolume);
+            document.getElementById('btcDominance').textContent = 
+                btcPrice ? ((btcPrice * calculateVolume(btcData[1])) / totalMarketCap * 100).toFixed(2) + '%' : '-';
+        }
+
+        // 자동 연결
+        connect();
+    </script>
+</body>
+</html> 
