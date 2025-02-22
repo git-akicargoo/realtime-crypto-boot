@@ -17,90 +17,137 @@
 - [✓] 거래소별 변환 로직
 - [✓] 통합 변환 서비스
 
-### Layer 4 - Distribution [완료]
-- [✓] 기본 배포 서비스 구현
-  - [✓] DistributionService 인터페이스 정의
-  - [✓] DirectDistributionService 구현
-  - [✓] 메시지 전달 테스트
-  - [✓] 프론트엔드 웹소켓 핸들러 리팩토링
+### Layer 4 - Price Cache 아키텍처 [독립 서비스]
 
-- [✓] Kafka 기반 배포 구현
-  - [✓] KafkaDistributionService 구현
-  - [✓] Producer/Consumer 설정
-  - [✓] Consumer Group ID 동적 할당으로 모든 팔로워 메시지 수신
-  - [✓] 토픽 파티션 최적화 (단일 파티션)
-  - [✓] 장애 복구 로직
-  - [✓] 프론트엔드 영향도 없음 확인
+#### 1. 실행 모드 정의 [수정]
 
-- [✓] Leader-Follower 구현
-  - [✓] Zookeeper 연동
-  - [✓] 리더/팔로워 전환
-  - [✓] 역할별 동작 구현
+A. Direct-Local 모드
+- 환경: 로컬 개발/테스트
+- 특징
+  - 인메모리 캐시 사용
+  - H2 Database 사용
+  - 단일 프로세스 실행
+  - 빠른 개발/테스트
+- 사용 사례
+  - 로컬 개발 환경
+  - 단위/통합 테스트
+  - 알고리즘 검증
 
-- [✓] 모니터링 시스템 구현
-  - [✓] 데이터 흐름 모니터링
-    - [✓] Direct/Kafka 모드별 메트릭 수집
-    - [✓] 구간별 처리량 측정
-    - [✓] Lag 모니터링
-  - [✓] 인프라 상태 모니터링
-    - [✓] Kafka/Zookeeper 상태 체크
-    - [✓] 연결 상태 모니터링
-  - [✓] 로깅 시스템 최적화
-    - [✓] 로그 레벨 조정
-    - [✓] 불필요한 로그 제거
-    - [✓] 메모리 사용량 최적화
+B. Direct-Redis 모드
+- 환경: 실 서비스 운영
+- 특징
+  - Redis 캐시 사용
+  - MySQL Database 사용
+  - 실시간 가격 처리
+  - 고성능 데이터 접근
+- 사용 사례
+  - 프로덕션 환경
+  - 실시간 데이터 처리
+  - 다중 전략 지원
 
-- [✓] 멀티 백엔드 환경 구성
-  - [✓] Nginx 웹소켓 프록시 설정
-  - [✓] 로드밸런싱 설정 (least_conn)
-  - [✓] 멀티 백엔드 연결 테스트
-  - [✓] 리더/팔로워 구조 검증
+#### 2. 데이터 흐름 [수정]
 
-## 2. 성능 최적화 [완료]
-- [✓] KafkaDistributionService 개선
-  - [✓] 불필요한 헬스체크 호출 제거
-  - [✓] 메시지 전송 시 매번 체크하는 로직 개선
-- [✓] 세션 관리 및 데이터 전송 개선
-  - [✓] 웹소켓 세션 관리 로직 개선
-  - [✓] Direct/Kafka 모드 전환 시 세션 유지
-  - [✓] Sink 관리 최적화
-  - [✓] 불필요한 에러 로그 제거
+A. Direct-Local 모드
+```
+[거래소 WebSocket] → [ExchangeDataIntegrationService]
+                              ↓
+                    [PriceDataService]
+                              ↓
+                    [LocalPriceCache]
+                              ↓
+                      [H2 Database]
+```
 
-## 3. 향후 개선 계획 [옵션]
-### 성능 모니터링 고도화
-- [ ] 성능 지표 수집 강화
-  - [ ] 메시지 처리 지연시간 측정
-  - [ ] 메모리 사용량 모니터링
-  - [ ] GC 모니터링
-- [ ] 모니터링 대시보드 구현
-  - [ ] Grafana 연동
-  - [ ] 실시간 성능 지표 시각화
-  - [ ] 알림 설정
+B. Direct-Redis 모드
+```
+[거래소 WebSocket] → [ExchangeDataIntegrationService]
+                              ↓
+                    [PriceDataService]
+                              ↓
+                    [RedisPriceCache]
+                              ↓
+                      [MySQL Database]
+```
 
-### 장애 복구 시스템 고도화
-- [ ] 자동 복구 정책 세분화
-  - [ ] 장애 유형별 복구 전략
-  - [ ] 단계별 복구 프로세스
-- [ ] 장애 이력 관리
-  - [ ] 장애 로그 저장 및 분석
-  - [ ] 장애 패턴 분석
-  - [ ] 예방적 조치 시스템
+#### 3. 패키지 구조 [수정]
+```
+com.example.boot.exchange
+├── layer4_price_cache    # 가격 데이터 캐싱 서비스 (기존 layer4_arbitrage)
+│   ├── common
+│   │   ├── config
+│   │   │   └── CacheConfig.java            # 캐시 모드 설정
+│   │   └── model
+│   │       └── PriceData.java              # 가격 데이터 모델
+│   ├── cache
+│   │   ├── PriceCache.java                 # 캐시 인터페이스
+│   │   ├── direct                          # Direct 모드
+│   │   │   └── LocalPriceCache.java        # 로컬 캐시 구현
+│   │   └── redis                           # Redis 모드
+│   │       └── RedisPriceCache.java        # Redis 캐시 구현
+│   └── service
+│       └── PriceDataService.java           # 가격 데이터 관리 서비스
 
-### 확장성 개선
-- [ ] 멀티 클러스터 지원
-  - [ ] 지역별 클러스터 구성
-  - [ ] 클러스터 간 데이터 동기화
-- [ ] 부하 분산 시스템
-  - [ ] 동적 스케일링
-  - [ ] 로드밸런싱 최적화
+com.example.boot.trading      # 거래 전략 서비스들
+├── common
+│   └── model
+│       └── TradeResult.java               # 거래 결과 공통 모델
+├── arbitrage                              # 재정거래 서비스
+│   ├── config
+│   │   └── ArbitrageConfig.java          # 재정거래 설정
+│   ├── model
+│   │   ├── ArbitrageResult.java          # 재정거래 결과
+│   │   └── ArbitrageOpportunity.java     # 재정거래 기회
+│   └── service
+│       └── ArbitrageService.java         # 재정거래 서비스
+└── shortterm                             # 단타거래 서비스
+    ├── config
+    │   └── ShortTermConfig.java          # 단타거래 설정
+    ├── model
+    │   └── ShortTermResult.java          # 단타거래 결과
+    └── service
+        └── ShortTermService.java         # 단타거래 서비스
+```
 
-### 보안 강화
-- [ ] 웹소켓 보안
-  - [ ] 인증/인가 시스템 구현
-  - [ ] 세션 관리 보안 강화
-- [ ] 데이터 암호화
-  - [ ] 전송 데이터 암호화
-  - [ ] 저장 데이터 암호화
+#### 4. 구현 우선순위 [수정]
+1. 기반 서비스 구현 [1-2주차]
+- [ ] PriceDataService 구현
+- [ ] LocalPriceCache (Direct 모드) 구현
+- [ ] RedisPriceCache (Redis 모드) 구현
+- [ ] 캐시 모드 전환 기능
+- [ ] 단위/통합 테스트
+
+2. 재정거래 서비스 [3-4주차]
+- [ ] ArbitrageService 구현
+- [ ] 재정거래 알고리즘
+- [ ] 성능 최적화
+- [ ] 테스트 및 검증
+
+3. 단타거래 서비스 [5-6주차]
+- [ ] ShortTermService 구현
+- [ ] 단타거래 전략
+- [ ] 성능 최적화
+- [ ] 테스트 및 검증
+
+#### 5. 주요 고려사항
+1. 서비스 분리
+   - 기반 서비스와 거래 서비스 명확히 분리
+   - 각 서비스의 독립성 보장
+   - 느슨한 결합도 유지
+
+2. 확장성
+   - 새로운 거래 전략 추가 용이
+   - 캐시 구현 변경 용이
+   - 설정 변경 용이
+
+3. 실시간성
+   - 최소 지연 시간
+   - 빠른 데이터 접근
+   - 정확한 가격 정보
+
+4. 운영성
+   - 모니터링
+   - 로깅
+   - 장애 대응
 
 ## 4. 현재 구현된 주요 기능
 1. 인프라 상태 관리
@@ -131,6 +178,38 @@
   - [✓] 라우팅 설정
   - [✓] 공통 스타일 정의
 
+### WebSocket 연동 구조 [신규]
+#### 1. Backend WebSocket 구조
+```
+[Frontend React App] ←→ [FrontendWebSocketHandler]
+                            ↓
+                    [PriceDataService]
+                            ↓
+                    [Price Cache (Local/Redis)]
+```
+
+#### 2. Backend 패키지 구조
+```
+com.example.boot.web
+├── websocket                             # 프론트엔드 연동
+│   ├── config
+│   │   └── FrontendWebSocketConfig.java  # WebSocket 설정
+│   └── handler
+│       └── FrontendWebSocketHandler.java # WebSocket 핸들러
+
+com.example.boot.trading.web             # 거래 전략 UI
+├── arbitrage                            # 재정거래 페이지
+│   ├── controller
+│   │   └── ArbitrageViewController.java
+│   └── model
+│       └── ArbitrageViewModel.java
+└── shortterm                            # 단타거래 페이지
+    ├── controller
+    │   └── ShortTermViewController.java
+    └── model
+        └── ShortTermViewModel.java
+```
+
 ### 페이지별 구현 [진행중]
 - [✓] 공통 컴포넌트
   - [✓] 네비게이션 바
@@ -142,21 +221,43 @@
   - [✓] 웹소켓 연결 유지
   - [✓] 실시간 데이터 표시
   - [✓] 가격 테이블 UI/UX 개선
-    - [✓] 거래소별 가격 비교 섹션 추가
-    - [✓] 최저가/최고가 거래소 정보 표시
-    - [✓] 24시간 등락률 및 거래량 표시
-    - [✓] 변환된 가격 시각적 구분
 
-- [ ] 추가 페이지 (필요시)
-  - [ ] 대시보드
-  - [ ] 설정
-  - [ ] 로그 뷰어
+- [ ] Arbitrage 페이지 [신규]
+  - [ ] 재정거래 기회 모니터링
+  - [ ] 실시간 차익 계산 결과
+  - [ ] 거래 실행 인터페이스
+  - [ ] 거래 이력 조회
+
+- [ ] Short-term Trading 페이지 [신규]
+  - [ ] 단타거래 기회 모니터링
+  - [ ] 실시간 시그널
+  - [ ] 거래 실행 인터페이스
+  - [ ] 거래 이력 조회
+
+- [ ] Dashboard 페이지 [신규]
+  - [ ] 전체 거래 현황
+  - [ ] 수익률 통계
+  - [ ] 시스템 상태
+
+### WebSocket 메시지 구조
+```json
+{
+  "type": "PRICE_UPDATE",
+  "data": {
+    "exchange": "binance",
+    "symbol": "BTC/USDT",
+    "price": "45000.00",
+    "timestamp": "2024-01-01T00:00:00Z"
+  }
+}
+```
 
 ### 구현 방식
-1. HTML 버전 활용
-   - 기존 exchange-monitor.html 재사용
-   - iframe으로 통합
-   - 안정적인 기능 유지
+1. WebSocket 기반 구현
+   - FrontendWebSocketConfig 설정
+   - FrontendWebSocketHandler 구현
+   - 실시간 데이터 전송
+   - 연결 관리 및 오류 처리
 
 2. 공통 요소
    - 네비게이션 바
@@ -167,4 +268,43 @@
    - WebSocket 연결
    - 데이터 표시
    - 필터링
-   - 기본 통계 
+   - 기본 통계
+
+com.example.boot.exchange
+├── layer3_data_converter     
+├── layer4_distribution      
+├── layer4_price_cache    # 가격 데이터 캐싱 서비스 (기존 layer4_arbitrage)
+│   ├── common
+│   │   ├── config
+│   │   │   └── CacheConfig.java            # 캐시 모드 설정
+│   │   └── model
+│   │       └── PriceData.java              # 가격 데이터 모델
+│   ├── cache
+│   │   ├── PriceCache.java                 # 캐시 인터페이스
+│   │   ├── direct                          # Direct 모드
+│   │   │   └── LocalPriceCache.java        # 로컬 캐시 구현
+│   │   └── redis                           # Redis 모드
+│   │       └── RedisPriceCache.java        # Redis 캐시 구현
+│   └── service
+│       └── PriceDataService.java           # 가격 데이터 관리 서비스
+
+com.example.boot.trading      # 거래 전략 서비스들
+├── common
+│   └── model
+│       └── TradeResult.java               # 거래 결과 공통 모델
+├── arbitrage                              # 재정거래 서비스
+│   ├── config
+│   │   └── ArbitrageConfig.java          # 재정거래 설정
+│   ├── model
+│   │   ├── ArbitrageResult.java          # 재정거래 결과
+│   │   └── ArbitrageOpportunity.java     # 재정거래 기회
+│   └── service
+│       └── ArbitrageService.java         # 재정거래 서비스
+└── shortterm                             # 단타거래 서비스
+    ├── config
+    │   └── ShortTermConfig.java          # 단타거래 설정
+    ├── model
+    │   └── ShortTermResult.java          # 단타거래 결과
+    └── service
+        └── ShortTermService.java         # 단타거래 서비스
+``` 

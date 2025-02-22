@@ -51,6 +51,7 @@ exchange:
       - ETH
       - XRP
       - DOGE
+      - USDT
   exchanges:
     binance:
       supported-currencies:
