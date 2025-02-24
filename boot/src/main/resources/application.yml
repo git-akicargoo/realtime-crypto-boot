@@ -12,6 +12,13 @@ spring:
       fail-fast: false    # Kafka 연결 실패해도 애플리케이션 시작
       operation-timeout: 10000  # 10초
       close-timeout: 10000      # 10초
+  data:
+    redis:
+      enabled: false  # Redis 비활성화로 시작
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD}  # 필요한 경우
+      connect-timeout: 3000  # 연결 타임아웃 (밀리초)
 
 zookeeper:
   connect-string: localhost:2181
