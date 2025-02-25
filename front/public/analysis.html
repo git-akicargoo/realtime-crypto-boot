@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Market Analysis</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --accent-color: #3b82f6;
+            --border-color: #334155;
+            --up-color: #10b981;
+            --down-color: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+        }
+
+        .analysis-form {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            height: fit-content;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-secondary);
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .results-panel {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 500px;
+        }
+
+        .result-card {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .result-card.STRONG_REBOUND {
+            border-left-color: var(--up-color);
+        }
+
+        .result-card.POSSIBLE_REBOUND {
+            border-left-color: #eab308;
+        }
+
+        .result-card.NO_REBOUND {
+            border-left-color: var(--down-color);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .positive { color: var(--up-color); }
+        .negative { color: var(--down-color); }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--down-color);
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="analysis-form">
+            <h2>Market Analysis</h2>
+            <form id="analysisForm">
+                <div class="form-group">
+                    <label for="exchange">Exchange:</label>
+                    <select id="exchange" required>
+                        <option value="">Select Exchange</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="currencyPair">Currency Pair:</label>
+                    <select id="currencyPair" required>
+                        <option value="">Select Pair</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Price Drop Threshold (%)</label>
+                    <input type="number" id="priceDropThreshold" value="-1.0" step="0.1" required>
+                </div>
+                <div class="form-group">
+                    <label>Volume Increase Threshold (%)</label>
+                    <input type="number" id="volumeIncreaseThreshold" value="50.0" step="0.1" required>
+                </div>
+                <div class="button-group">
+                    <button type="button" id="startAnalysis">Start Analysis</button>
+                    <button type="button" id="stopAnalysis" style="display: none; background: #ef4444;">Stop Analysis</button>
+                </div>
+            </form>
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+        </div>
+
+        <div class="results-panel">
+            <h2>Analysis Results</h2>
+            <div id="resultsList"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let pendingRequest = null;
+        const startButton = document.getElementById('startAnalysis');
+        const stopButton = document.getElementById('stopAnalysis');
+        const resultsList = document.getElementById('resultsList');
+        const errorMessage = document.getElementById('errorMessage');
+
+        let API_BASE_URL;
+
+        async function loadExchangeConfig() {
+            try {
+                // API base URL 로드
+                const configResponse = await fetch('http://localhost:8080/config');
+                const config = await configResponse.json();
+                API_BASE_URL = config.baseUrl;
+                
+                // 거래소 설정 로드
+                const exchangeResponse = await fetch('http://localhost:8080/api/v1/config/supported-pairs');
+                const exchangeConfig = await exchangeResponse.json();
+                
+                const exchangeSelect = document.getElementById('exchange');
+                const currencyPairSelect = document.getElementById('currencyPair');
+
+                // 거래소 옵션 추가
+                exchangeSelect.innerHTML = '<option value="">Select Exchange</option>';
+                Object.keys(exchangeConfig.exchanges).forEach(exchange => {
+                    const option = document.createElement('option');
+                    option.value = exchange;
+                    option.textContent = exchange;
+                    exchangeSelect.appendChild(option);
+                });
+
+                // 거래소 선택 이벤트
+                exchangeSelect.addEventListener('change', function() {
+                    const selectedExchange = this.value;
+                    console.log('Selected exchange:', selectedExchange);
+                    
+                    currencyPairSelect.innerHTML = '<option value="">Select Pair</option>';
+                    
+                    if (selectedExchange && exchangeConfig.exchanges[selectedExchange]) {
+                        const baseCurrency = selectedExchange === 'BINANCE' ? 'USDT' : 'KRW';
+                        const symbols = exchangeConfig.symbols;
+                        
+                        symbols.forEach(symbol => {
+                            if (symbol !== baseCurrency) {  // 기준 통화는 제외
+                                const option = document.createElement('option');
+                                option.value = `${baseCurrency}-${symbol}`;
+                                option.textContent = `${baseCurrency}-${symbol}`;
+                                currencyPairSelect.appendChild(option);
+                            }
+                        });
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to load exchange config:', error);
+                errorMessage.textContent = 'Failed to load exchange configuration';
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        function connectWebSocket() {
+            const serverUrl = new URL(API_BASE_URL);
+            const wsUrl = `ws://${serverUrl.host}/ws/analysis`;
+            
+            console.log('Connecting to WebSocket:', wsUrl);
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('WebSocket successfully connected!');
+                errorMessage.style.display = 'none';
+                
+                if (pendingRequest) {
+                    console.log('Sending pending request:', pendingRequest);
+                    ws.send(JSON.stringify(pendingRequest));
+                    pendingRequest = null;
+                }
+            };
+            
+            ws.onmessage = (event) => {
+                console.log('Received WebSocket message:', event.data);
+                try {
+                    const result = JSON.parse(event.data);
+                    console.log('Parsed analysis result:', result);
+                    updateAnalysisCard(result);
+                } catch (error) {
+                    console.error('Error parsing WebSocket message:', error);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error occurred:', error);
+                errorMessage.textContent = 'Connection error occurred';
+                errorMessage.style.display = 'block';
+            };
+            
+            ws.onclose = (event) => {
+                console.log('WebSocket closed. Code:', event.code, 'Reason:', event.reason);
+                ws = null;
+                stopAnalysis();
+            };
+        }
+
+        function startAnalysis() {
+            console.log('Start analysis button clicked');
+            
+            const exchange = document.getElementById('exchange').value;
+            const currencyPair = document.getElementById('currencyPair').value;
+            
+            // 필수 값 검증
+            if (!exchange || !currencyPair) {
+                console.error('Exchange and Currency Pair must be selected');
+                errorMessage.textContent = 'Please select both Exchange and Currency Pair';
+                errorMessage.style.display = 'block';
+                return;
+            }
+            
+            const request = {
+                command: 'start',
+                data: {
+                    exchange: exchange,
+                    currencyPair: currencyPair,
+                    priceDropThreshold: parseFloat(document.getElementById('priceDropThreshold').value),
+                    volumeIncreaseThreshold: parseFloat(document.getElementById('volumeIncreaseThreshold').value)
+                }
+            };
+            
+            console.log('Analysis request prepared:', request);
+
+            if (!ws || ws.readyState === WebSocket.CLOSED) {
+                console.log('WebSocket not connected. Creating new connection...');
+                pendingRequest = request;
+                connectWebSocket();
+            } else if (ws.readyState === WebSocket.OPEN) {
+                console.log('WebSocket is open. Sending request directly...');
+                ws.send(JSON.stringify(request));
+            } else {
+                console.log('WebSocket is connecting. Storing request for later...');
+                pendingRequest = request;
+            }
+
+            startButton.style.display = 'none';
+            stopButton.style.display = 'block';
+        }
+
+        function stopAnalysis() {
+            console.log('Stop analysis button clicked');
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending stop command...');
+                ws.send(JSON.stringify({ command: 'stop' }));
+                ws.close();
+            }
+            startButton.style.display = 'block';
+            stopButton.style.display = 'none';
+            pendingRequest = null;
+        }
+
+        function updateAnalysisCard(result) {
+            console.log('Updating analysis card with result:', result);
+            
+            // 새 카드 생성
+            const card = document.createElement('div');
+            card.className = `result-card ${result.analysisResult}`;
+            
+            card.innerHTML = `
+                <div class="result-header">
+                    <strong>${result.exchange} - ${result.currencyPair}</strong>
+                    <span>${new Date(result.analysisTime).toLocaleString()}</span>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Current Price:</span>
+                        <span class="current-price">${result.currentPrice.toFixed(2)}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Price Change:</span>
+                        <span class="price-change ${result.priceChangePercent >= 0 ? 'positive' : 'negative'}">
+                            ${result.priceChangePercent.toFixed(2)}%
+                        </span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Volume Change:</span>
+                        <span class="volume-change">${result.volumeChangePercent.toFixed(2)}%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Rebound Probability:</span>
+                        <span class="rebound-probability">${result.reboundProbability.toFixed(2)}%</span>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <strong>Analysis Result:</strong> ${result.analysisResult || 'N/A'}
+                </div>
+                <div style="color: var(--text-secondary); margin-top: 5px;">
+                    ${result.message || ''}
+                </div>
+            `;
+
+            // 결과 목록의 맨 앞에 새 카드 추가
+            const resultsList = document.getElementById('resultsList');
+            resultsList.insertBefore(card, resultsList.firstChild);
+            
+            console.log('Card created and added to results list');
+        }
+
+        // 이벤트 리스너 설정
+        startButton.addEventListener('click', startAnalysis);
+        stopButton.addEventListener('click', stopAnalysis);
+
+        // 페이지 로드시 초기 설정
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Page loaded, initializing...');
+            loadExchangeConfig();
+        });
+    </script>
+</body>
+</html> 

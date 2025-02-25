@@ -28,6 +28,17 @@ export default function App() {
             }}
           />
         } />
+        <Route path="/analysis" element={
+          <iframe 
+            src="/analysis.html" 
+            style={{
+              width: '100%',
+              height: 'calc(100vh - 60px)',
+              border: 'none',
+              marginTop: '60px'
+            }}
+          />
+        } />
         <Route path="/" element={
           <div style={{ 
             marginTop: '60px', 

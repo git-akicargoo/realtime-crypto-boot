@@ -6,6 +6,7 @@ import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
+import com.example.boot.web.websocket.handler.AnalysisWebSocketHandler;
 import com.example.boot.web.websocket.handler.FrontendWebSocketHandler;
 
 @Configuration
@@ -14,10 +15,16 @@ public class FrontendWebSocketConfig implements WebSocketConfigurer {
 
     @Autowired
     private FrontendWebSocketHandler frontendHandler;
+    
+    @Autowired
+    private AnalysisWebSocketHandler analysisHandler;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(frontendHandler, "/ws/exchange")
                .setAllowedOrigins("*");  // 개발용
+               
+        registry.addHandler(analysisHandler, "/ws/analysis")
+               .setAllowedOrigins("*");
     }
 } 

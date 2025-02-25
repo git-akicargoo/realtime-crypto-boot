@@ -23,6 +23,12 @@ export default function Navigation() {
           >
             Dashboard
           </Link>
+          <Link
+            to="/analysis"
+            className={location.pathname === '/analysis' ? 'active' : ''}
+          >
+            Analysis
+          </Link>
         </div>
       </div>
     </header>

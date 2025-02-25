@@ -94,14 +94,18 @@ logging:
     org.apache.curator: ERROR      # Curator 로깅
     org.springframework: WARN
 
+# CORS 설정
+cors:
+  allowed-origins: http://localhost:5173
+
 ---
 # 로컬 개발 환경
 spring:
   config:
     activate:
       on-profile: local
-  kafka:
-    bootstrap-servers: localhost:9092  # localhost로 수정
+cors:
+  allowed-origins: http://localhost:5173
 
 zookeeper:
   connect-string: localhost:2181
@@ -112,8 +116,8 @@ spring:
   config:
     activate:
       on-profile: docker
-  kafka:
-    bootstrap-servers: kafka:9092
+cors:
+  allowed-origins: http://localhost:5173  # Docker 환경의 프론트엔드 주소
 
 zookeeper:
   connect-string: zookeeper:2181
@@ -124,6 +128,8 @@ spring:
   config:
     activate:
       on-profile: prod
+cors:
+  allowed-origins: ${FRONTEND_URL}  # 운영 환경의 프론트엔드 주소는 환경변수로 주입
   kafka:
     bootstrap-servers: ${KAFKA_SERVERS}
 
