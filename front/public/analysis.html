@@ -283,20 +283,91 @@
             };
         }
 
-        function startAnalysis() {
-            console.log('Start analysis button clicked');
+        function createAnalysisCard(exchange, currencyPair) {
+            const cardId = `${exchange}-${currencyPair}`.toLowerCase();
+            console.log('Creating card with ID:', cardId);
+            let card = document.getElementById(cardId);
             
-            const exchange = document.getElementById('exchange').value;
-            const currencyPair = document.getElementById('currencyPair').value;
-            
-            // 필수 값 검증
-            if (!exchange || !currencyPair) {
-                console.error('Exchange and Currency Pair must be selected');
-                errorMessage.textContent = 'Please select both Exchange and Currency Pair';
-                errorMessage.style.display = 'block';
-                return;
+            if (!card) {
+                card = document.createElement('div');
+                card.id = cardId;
+                card.className = 'result-card';
+                
+                card.innerHTML = `
+                    <div class="result-header">
+                        <strong>${exchange.toUpperCase()} - ${currencyPair}</strong>
+                        <span class="analysis-time"></span>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Current Price:</span>
+                            <span class="current-price">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Price Change:</span>
+                            <span class="price-change">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Volume Change:</span>
+                            <span class="volume-change">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Rebound Probability:</span>
+                            <span class="rebound-probability">-</span>
+                        </div>
+                    </div>
+                    <div class="analysis-result">
+                        <strong>Analysis Result:</strong> <span>-</span>
+                    </div>
+                    <div class="analysis-message" style="color: var(--text-secondary); margin-top: 5px;">
+                        Waiting for data...
+                    </div>
+                    <div class="card-controls" style="margin-top: 10px;">
+                        <button class="start-button">Start</button>
+                        <button class="stop-button" style="display: none;">Stop</button>
+                    </div>
+                `;
+
+                // 카드별 시작/정지 버튼 이벤트 리스너
+                const startBtn = card.querySelector('.start-button');
+                const stopBtn = card.querySelector('.stop-button');
+                
+                startBtn.addEventListener('click', () => startAnalysis(exchange, currencyPair, card));
+                stopBtn.addEventListener('click', () => stopAnalysis(exchange, currencyPair, card));
+
+                // 결과 목록의 맨 앞에 새 카드 추가
+                const resultsList = document.getElementById('resultsList');
+                resultsList.insertBefore(card, resultsList.firstChild);
             }
             
+            return card;
+        }
+
+        function updateAnalysisCard(result) {
+            const cardId = `${result.exchange}-${result.currencyPair}`.toLowerCase();
+            console.log('Updating card:', cardId);
+            const card = document.getElementById(cardId);
+            
+            if (card) {
+                console.log('Found card, updating values');
+                card.className = `result-card ${result.analysisResult}`;
+                card.querySelector('.analysis-time').textContent = new Date(result.analysisTime).toLocaleString();
+                card.querySelector('.current-price').textContent = result.currentPrice.toFixed(2);
+                
+                const priceChange = card.querySelector('.price-change');
+                priceChange.textContent = `${result.priceChangePercent.toFixed(2)}%`;
+                priceChange.className = `price-change ${result.priceChangePercent >= 0 ? 'positive' : 'negative'}`;
+                
+                card.querySelector('.volume-change').textContent = `${result.volumeChangePercent.toFixed(2)}%`;
+                card.querySelector('.rebound-probability').textContent = `${result.reboundProbability.toFixed(2)}%`;
+                card.querySelector('.analysis-result span').textContent = result.analysisResult || 'N/A';
+                card.querySelector('.analysis-message').textContent = result.message || '';
+            } else {
+                console.log('Card not found:', cardId);
+            }
+        }
+
+        function startAnalysis(exchange, currencyPair, card) {
             const request = {
                 command: 'start',
                 data: {
@@ -307,87 +378,48 @@
                 }
             };
             
-            console.log('Analysis request prepared:', request);
-
             if (!ws || ws.readyState === WebSocket.CLOSED) {
-                console.log('WebSocket not connected. Creating new connection...');
                 pendingRequest = request;
                 connectWebSocket();
             } else if (ws.readyState === WebSocket.OPEN) {
-                console.log('WebSocket is open. Sending request directly...');
                 ws.send(JSON.stringify(request));
             } else {
-                console.log('WebSocket is connecting. Storing request for later...');
                 pendingRequest = request;
             }
 
-            startButton.style.display = 'none';
-            stopButton.style.display = 'block';
+            card.querySelector('.start-button').style.display = 'none';
+            card.querySelector('.stop-button').style.display = 'block';
         }
 
-        function stopAnalysis() {
-            console.log('Stop analysis button clicked');
-            
+        function stopAnalysis(exchange, currencyPair, card) {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                console.log('Sending stop command...');
-                ws.send(JSON.stringify({ command: 'stop' }));
-                ws.close();
+                ws.send(JSON.stringify({ 
+                    command: 'stop',
+                    data: {
+                        exchange: exchange,
+                        currencyPair: currencyPair
+                    }
+                }));
             }
-            startButton.style.display = 'block';
-            stopButton.style.display = 'none';
-            pendingRequest = null;
+            card.querySelector('.start-button').style.display = 'block';
+            card.querySelector('.stop-button').style.display = 'none';
         }
 
-        function updateAnalysisCard(result) {
-            console.log('Updating analysis card with result:', result);
+        // 메인 폼의 시작 버튼 클릭 핸들러
+        document.getElementById('startAnalysis').addEventListener('click', function() {
+            const exchange = document.getElementById('exchange').value;
+            const currencyPair = document.getElementById('currencyPair').value;
             
-            // 새 카드 생성
-            const card = document.createElement('div');
-            card.className = `result-card ${result.analysisResult}`;
-            
-            card.innerHTML = `
-                <div class="result-header">
-                    <strong>${result.exchange} - ${result.currencyPair}</strong>
-                    <span>${new Date(result.analysisTime).toLocaleString()}</span>
-                </div>
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <span class="stat-label">Current Price:</span>
-                        <span class="current-price">${result.currentPrice.toFixed(2)}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Price Change:</span>
-                        <span class="price-change ${result.priceChangePercent >= 0 ? 'positive' : 'negative'}">
-                            ${result.priceChangePercent.toFixed(2)}%
-                        </span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Volume Change:</span>
-                        <span class="volume-change">${result.volumeChangePercent.toFixed(2)}%</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Rebound Probability:</span>
-                        <span class="rebound-probability">${result.reboundProbability.toFixed(2)}%</span>
-                    </div>
-                </div>
-                <div style="margin-top: 10px;">
-                    <strong>Analysis Result:</strong> ${result.analysisResult || 'N/A'}
-                </div>
-                <div style="color: var(--text-secondary); margin-top: 5px;">
-                    ${result.message || ''}
-                </div>
-            `;
+            if (!exchange || !currencyPair) {
+                const errorMessage = document.getElementById('errorMessage');
+                errorMessage.textContent = 'Please select both Exchange and Currency Pair';
+                errorMessage.style.display = 'block';
+                return;
+            }
 
-            // 결과 목록의 맨 앞에 새 카드 추가
-            const resultsList = document.getElementById('resultsList');
-            resultsList.insertBefore(card, resultsList.firstChild);
-            
-            console.log('Card created and added to results list');
-        }
-
-        // 이벤트 리스너 설정
-        startButton.addEventListener('click', startAnalysis);
-        stopButton.addEventListener('click', stopAnalysis);
+            const card = createAnalysisCard(exchange.toLowerCase(), currencyPair);
+            startAnalysis(exchange, currencyPair, card);
+        });
 
         // 페이지 로드시 초기 설정
         document.addEventListener('DOMContentLoaded', () => {
