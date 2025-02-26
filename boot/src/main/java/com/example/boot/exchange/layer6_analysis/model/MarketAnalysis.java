@@ -35,4 +35,7 @@ public class MarketAnalysis {
     private double volumeChangePercent;
     private double priceVolatility;
     private String analysisDetails;
+    
+    private boolean isCompleted;
+    private double profitLossPercent;
 } 
