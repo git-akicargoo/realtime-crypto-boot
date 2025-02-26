@@ -17,4 +17,7 @@ public class AnalysisResponse {
     private double reboundProbability;
     private String analysisResult;  // "STRONG_REBOUND", "POSSIBLE_REBOUND", "NO_REBOUND"
     private String message;
+    private double sma1Difference;  // 1분 SMA와의 차이(%)
+    private double sma3Difference;  // 3분 SMA와의 차이(%)
+    private boolean smaBreakout;    // SMA 돌파 여부
 } 

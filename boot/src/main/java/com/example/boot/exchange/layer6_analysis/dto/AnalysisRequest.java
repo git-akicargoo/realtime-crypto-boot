@@ -12,4 +12,6 @@ public class AnalysisRequest {
     private String currencyPair;       // 거래쌍
     private double priceDropThreshold; // 가격 하락 임계값
     private double volumeIncreaseThreshold; // 거래량 증가 임계값
+    private int smaShortPeriod;       // 단기 SMA 기간 (분)
+    private int smaLongPeriod;        // 장기 SMA 기간 (분)
 } 

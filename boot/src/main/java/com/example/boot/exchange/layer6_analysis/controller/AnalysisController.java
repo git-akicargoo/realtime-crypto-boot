@@ -16,62 +16,48 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/analysis")
+@RequestMapping("/api/analysis")
 @RequiredArgsConstructor
 public class AnalysisController {
     private final TradingAnalysisExecutor executor;
     private final RedisCacheService cacheService;
     
-    @PostMapping("/execute")
-    public ResponseEntity<AnalysisResponse> executeAnalysis(@RequestBody AnalysisRequest request) {
-        log.info("=== Analysis Request Start ===");
-        log.info("Raw request object: {}", request);
-        log.info("Exchange: {}", request.getExchange());
-        log.info("Pair: {}", request.getCurrencyPair());
-        log.info("Price Drop: {}", request.getPriceDropThreshold());
-        log.info("Volume Increase: {}", request.getVolumeIncreaseThreshold());
-        log.info("=== Analysis Request End ===");
-
+    @PostMapping("/rebound")
+    public ResponseEntity<AnalysisResponse> analyzeRebound(@RequestBody AnalysisRequest request) {
         try {
-            log.info("Received analysis request - Exchange: {}, Pair: {}, Drop: {}, Volume: {}", 
-                request.getExchange(), request.getCurrencyPair(), 
-                request.getPriceDropThreshold(), request.getVolumeIncreaseThreshold());
-            
-            var latestData = cacheService.getAnalysisWindow(
-                request.getExchange(), 
+            var data = cacheService.getLatestData(
+                request.getExchange(),
                 request.getCurrencyPair()
             );
-            
-            log.info("Analysis window result - Found: {}, Size: {}", 
-                !latestData.isEmpty(), latestData.size());
-            
-            if (latestData.isEmpty()) {
-                return ResponseEntity.ok(
-                    AnalysisResponse.builder()
-                        .exchange(request.getExchange())
-                        .currencyPair(request.getCurrencyPair())
-                        .message("No recent data available for analysis")
-                        .build()
-                );
+
+            if (data == null) {
+                return ResponseEntity.notFound().build();
             }
-            
-            // 분석 실행 및 결과 반환
+
             var result = executor.executeAnalysis(
-                latestData.get(0),
+                data,
                 request.getPriceDropThreshold(),
-                request.getVolumeIncreaseThreshold()
+                request.getVolumeIncreaseThreshold(),
+                request.getSmaShortPeriod(),
+                request.getSmaLongPeriod()
             );
-            
+
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            log.error("Failed to execute analysis: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(
-                AnalysisResponse.builder()
-                    .exchange(request.getExchange())
-                    .currencyPair(request.getCurrencyPair())
-                    .message("Analysis failed: " + e.getMessage())
-                    .build()
-            );
+            log.error("Analysis failed", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/stop")
+    public ResponseEntity<Void> stopAnalysis(@RequestBody AnalysisRequest request) {
+        try {
+            // 분석 작업 중지 및 리소스 정리
+            executor.stopAnalysis(request.getExchange(), request.getCurrencyPair());
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Failed to stop analysis", e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 } 

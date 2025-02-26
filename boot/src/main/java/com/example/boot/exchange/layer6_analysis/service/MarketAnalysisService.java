@@ -22,7 +22,6 @@ import com.example.boot.exchange.layer6_analysis.dto.AnalysisResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 @Slf4j
 @Service
@@ -31,7 +30,11 @@ public class MarketAnalysisService {
     private final RedisCacheService cacheService;
     private final Map<String, Flux<AnalysisResponse>> activeAnalyses = new ConcurrentHashMap<>();
     
-    public AnalysisResponse analyzeRebound(StandardExchangeData currentData, double priceDropThreshold, double volumeIncreaseThreshold) {
+    public AnalysisResponse analyzeRebound(StandardExchangeData currentData, 
+                                         double priceDropThreshold, 
+                                         double volumeIncreaseThreshold,
+                                         int smaShortPeriod,
+                                         int smaLongPeriod) {
         log.info("Starting analysis for {} - {}", currentData.getExchange(), currentData.getCurrencyPair());
         
         List<StandardExchangeData> history = cacheService.getAnalysisWindow(
@@ -64,16 +67,24 @@ public class MarketAnalysisService {
         double reboundProb = calculateReboundProbability(priceChange, volumeChange);
         log.info("Calculated rebound probability: {}%", reboundProb);
 
+        // SMA 계산 (동적 기간 적용)
+        double smaShortDiff = calculateSMADifference(history, smaShortPeriod);
+        double smaLongDiff = calculateSMADifference(history, smaLongPeriod);
+        boolean smaBreakout = isSMABreakout(smaShortDiff, smaLongDiff);
+
         return AnalysisResponse.builder()
             .exchange(latestData.getExchange())
             .currencyPair(latestData.getCurrencyPair().toString())
             .analysisTime(LocalDateTime.now())
-            .currentPrice(latestData.getPrice().doubleValue())  // 최신 데이터의 가격 사용
+            .currentPrice(latestData.getPrice().doubleValue())
             .priceChangePercent(priceChange)
             .volumeChangePercent(volumeChange)
             .reboundProbability(reboundProb)
             .analysisResult(determineAnalysisResult(reboundProb))
             .message(generateAnalysisMessage(priceChange, volumeChange, reboundProb))
+            .sma1Difference(smaShortDiff)
+            .sma3Difference(smaLongDiff)
+            .smaBreakout(smaBreakout)
             .build();
     }
     
@@ -166,37 +177,21 @@ public class MarketAnalysisService {
         return (normalizedPrice * priceWeight + normalizedVolume * volumeWeight) * 100;
     }
 
-    public Flux<AnalysisResponse> startRealtimeAnalysis(AnalysisRequest request) {
-        String analysisKey = request.getExchange() + "_" + request.getCurrencyPair();
-        
-        Flux<AnalysisResponse> analysisFlux = Flux.interval(Duration.ofSeconds(1))
-            .flatMap(tick -> {
-                var latestData = cacheService.getAnalysisWindow(
-                    request.getExchange(),
-                    request.getCurrencyPair()
-                );
-                
-                if (latestData.isEmpty()) {
-                    return Mono.empty();
-                }
-
-                return Mono.just(analyzeRebound(
-                    latestData.get(0),
-                    request.getPriceDropThreshold(),
-                    request.getVolumeIncreaseThreshold()
-                ));
-            })
-            .doOnSubscribe(sub -> {
-                log.info("Starting realtime analysis for {}", analysisKey);
-            })
-            .doFinally(signalType -> {
-                log.info("Stopping realtime analysis for {}", analysisKey);
-                activeAnalyses.remove(analysisKey);
-            })
-            .share(); // 여러 구독자가 동일한 스트림을 공유하도록 함
-
-        activeAnalyses.put(analysisKey, analysisFlux);
-        return analysisFlux;
+    public Flux<AnalysisResponse> startRealtimeAnalysis(String exchange, 
+                                                       String currencyPair,
+                                                       double priceDropThreshold,
+                                                       double volumeIncreaseThreshold,
+                                                       int smaShortPeriod,
+                                                       int smaLongPeriod) {
+        return Flux.interval(Duration.ofSeconds(1))
+            .map(tick -> {
+                StandardExchangeData latestData = cacheService.getLatestData(exchange, currencyPair);
+                return analyzeRebound(latestData, 
+                                    priceDropThreshold, 
+                                    volumeIncreaseThreshold,
+                                    smaShortPeriod,
+                                    smaLongPeriod);
+            });
     }
 
     public void stopRealtimeAnalysis(AnalysisRequest request) {
@@ -210,5 +205,18 @@ public class MarketAnalysisService {
         cacheService.clearAnalysisData(cacheKey);
         
         log.info("Stopped analysis and cleared cache for {}", analysisKey);
+    }
+
+    private double calculateSMADifference(List<StandardExchangeData> data, int minutes) {
+        double sma = calculateMovingAverage(data, minutes * 60); // minutes를 초로 변환
+        if (data.isEmpty()) return 0.0;
+        
+        double currentPrice = data.get(data.size() - 1).getPrice().doubleValue();
+        return calculatePercentageChange(currentPrice, sma);
+    }
+
+    private boolean isSMABreakout(double shortDiff, double longDiff) {
+        // 단기 이평선이 장기 이평선을 상향돌파하는 경우
+        return shortDiff > 0 && longDiff < 0;
     }
 } 

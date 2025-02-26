@@ -1,5 +1,6 @@
 package com.example.boot.web.websocket.handler;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,10 +23,10 @@ import reactor.core.Disposable;
 @Component
 @RequiredArgsConstructor
 public class AnalysisWebSocketHandler extends TextWebSocketHandler {
+    private final ObjectMapper objectMapper;
     private final MarketAnalysisService marketAnalysisService;
     private final Map<WebSocketSession, AnalysisRequest> activeAnalysis = new ConcurrentHashMap<>();
     private final Map<WebSocketSession, Disposable> subscriptions = new ConcurrentHashMap<>();
-    private final ObjectMapper objectMapper;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -34,51 +35,47 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        log.info("Received message: {}", message.getPayload());
-        
         JsonNode jsonNode = objectMapper.readTree(message.getPayload());
         String command = jsonNode.get("command").asText();
-        
+        JsonNode data = jsonNode.get("data");
+
         if ("start".equals(command)) {
-            AnalysisRequest request = objectMapper.treeToValue(jsonNode.get("data"), AnalysisRequest.class);
-            log.info("Starting analysis for request: {}", request);
-            
-            activeAnalysis.put(session, request);
-            
-            Disposable oldSubscription = subscriptions.remove(session);
-            if (oldSubscription != null) {
-                oldSubscription.dispose();
-            }
-            
-            Disposable subscription = marketAnalysisService.startRealtimeAnalysis(request)
-                .subscribe(
-                    result -> {
-                        try {
-                            if (session.isOpen()) {
-                                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(result)));
-                            }
-                        } catch (Exception e) {
-                            log.error("Failed to send analysis result", e);
-                        }
-                    },
-                    error -> log.error("Error in analysis stream", error)
-                );
-            
-            subscriptions.put(session, subscription);
-            
+            AnalysisRequest request = objectMapper.treeToValue(data, AnalysisRequest.class);
+            startRealtimeAnalysis(session, request);
         } else if ("stop".equals(command)) {
-            log.info("Stopping analysis for session: {}", session.getId());
-            stopAnalysis(session);
+            stopRealtimeAnalysis(session);
         }
+    }
+
+    private void startRealtimeAnalysis(WebSocketSession session, AnalysisRequest request) {
+        stopRealtimeAnalysis(session);  // 기존 분석 중지
+        activeAnalysis.put(session, request);
+
+        Disposable subscription = marketAnalysisService.startRealtimeAnalysis(
+            request.getExchange(),
+            request.getCurrencyPair(),
+            request.getPriceDropThreshold(),
+            request.getVolumeIncreaseThreshold(),
+            request.getSmaShortPeriod(),    // 추가
+            request.getSmaLongPeriod()      // 추가
+        ).subscribe(result -> {
+            try {
+                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(result)));
+            } catch (IOException e) {
+                log.error("Failed to send analysis result", e);
+            }
+        });
+
+        subscriptions.put(session, subscription);
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         log.info("WebSocket closed: {}", session.getId());
-        stopAnalysis(session);
+        stopRealtimeAnalysis(session);
     }
 
-    private void stopAnalysis(WebSocketSession session) {
+    private void stopRealtimeAnalysis(WebSocketSession session) {
         Disposable subscription = subscriptions.remove(session);
         if (subscription != null) {
             subscription.dispose();
