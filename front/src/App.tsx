@@ -1,19 +1,21 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Navigation from './components/Navigation'
+import SystemStatus from './components/SystemStatus'
 
 export default function App() {
   return (
     <Router>
       <Navigation />
+      <SystemStatus />
       <Routes>
         <Route path="/monitor" element={
           <iframe 
             src="/exchange-monitor.html" 
             style={{
               width: '100%',
-              height: 'calc(100vh - 60px)',
+              height: 'calc(100vh - 84px)',
               border: 'none',
-              marginTop: '60px'
+              marginTop: '84px'
             }}
           />
         } />
@@ -22,9 +24,9 @@ export default function App() {
             src="/crypto-dashboard.html" 
             style={{
               width: '100%',
-              height: 'calc(100vh - 60px)',
+              height: 'calc(100vh - 84px)',
               border: 'none',
-              marginTop: '60px'
+              marginTop: '84px'
             }}
           />
         } />
@@ -33,9 +35,9 @@ export default function App() {
             src="/analysis.html" 
             style={{
               width: '100%',
-              height: 'calc(100vh - 60px)',
+              height: 'calc(100vh - 84px)',
               border: 'none',
-              marginTop: '60px'
+              marginTop: '84px'
             }}
           />
         } />

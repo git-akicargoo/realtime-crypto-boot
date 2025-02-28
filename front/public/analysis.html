@@ -156,14 +156,6 @@
         .positive { color: var(--up-color); }
         .negative { color: var(--down-color); }
 
-        .error-message {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--down-color);
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-
         .breakout {
             animation: flash 1s infinite;
         }
@@ -178,6 +170,21 @@
     <div class="container">
         <div class="analysis-form">
             <h2>Market Analysis</h2>
+            <div class="requirements-notice" style="
+                margin-bottom: 20px;
+                padding: 12px;
+                background: var(--bg-secondary);
+                border-radius: 8px;
+                border-left: 4px solid var(--accent-color);
+                color: var(--text-secondary);
+                font-size: 0.9em;
+            ">
+                <strong>Service Requirements:</strong>
+                <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+                    <li>Cache System (Redis)</li>
+                    <li>Message Broker (Kafka)</li>
+                </ul>
+            </div>
             <form id="analysisForm">
                 <div class="form-group">
                     <label for="exchange">Exchange:</label>
@@ -212,12 +219,20 @@
                     <button type="button" id="stopAnalysis" style="display: none; background: #ef4444;">Stop Analysis</button>
                 </div>
             </form>
-            <div id="errorMessage" class="error-message" style="display: none;"></div>
         </div>
 
         <div class="results-panel">
             <h2>Analysis Results</h2>
             <div id="resultsList"></div>
+        </div>
+
+        <div class="status-panel">
+            <strong>System Status:</strong>
+            <div id="systemStatus" class="status-items">
+                <div class="status-item">Redis: <span id="redisStatus">Checking...</span></div>
+                <div class="status-item">Kafka: <span id="kafkaStatus">Checking...</span></div>
+                <div class="status-item">Service: <span id="serviceStatus">Checking...</span></div>
+            </div>
         </div>
     </div>
 
@@ -227,29 +242,23 @@
         const startButton = document.getElementById('startAnalysis');
         const stopButton = document.getElementById('stopAnalysis');
         const resultsList = document.getElementById('resultsList');
-        const errorMessage = document.getElementById('errorMessage');
-
         let API_BASE_URL;
-        let exchangeConfig = null;  // 전역 변수로 선언
+        let exchangeConfig = null;
 
         async function loadExchangeConfig() {
             try {
-                // config 엔드포인트
                 const configResponse = await fetch('http://localhost:8080/config');
                 const config = await configResponse.json();
                 API_BASE_URL = config.baseUrl;
                 
-                // API 엔드포인트 경로 수정
                 const exchangeResponse = await fetch('http://localhost:8080/api/v1/config/supported-pairs');
                 exchangeConfig = await exchangeResponse.json();
                 
-                console.log('Received exchange config:', exchangeConfig);  // 디버깅용
+                console.log('Received exchange config:', exchangeConfig);
                 
-                // Exchange 선택 옵션 업데이트
                 const exchangeSelect = document.getElementById('exchange');
                 exchangeSelect.innerHTML = '<option value="">Select Exchange</option>';
                 
-                // exchanges 객체의 키(거래소 이름)를 배열로 변환하여 사용
                 if (exchangeConfig.exchanges) {
                     Object.keys(exchangeConfig.exchanges).forEach(exchange => {
                         const option = document.createElement('option');
@@ -260,14 +269,33 @@
                 }
             } catch (error) {
                 console.error('Failed to load exchange config:', error);
-                const errorMessage = document.getElementById('errorMessage');
-                errorMessage.textContent = 'Failed to load configuration';
-                errorMessage.style.display = 'block';
             }
         }
 
-        function connectWebSocket() {
-            // WebSocket도 직접 8080 포트로 연결
+        async function checkInfraStatus() {
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/trading/mode/status');
+                const status = await response.json();
+                
+                document.getElementById('redisStatus').textContent = status.redisOk ? 'UP' : 'DOWN';
+                document.getElementById('kafkaStatus').textContent = status.kafkaOk ? 'UP' : 'DOWN';
+                document.getElementById('serviceStatus').textContent = status.valid ? 'Available' : 'Unavailable';
+                
+                return status.valid;
+            } catch (error) {
+                console.error('Failed to check infrastructure status:', error);
+                return false;
+            }
+        }
+
+        async function connectWebSocket() {
+            const isInfraReady = await checkInfraStatus();
+            if (!isInfraReady) {
+                console.log('Infrastructure not ready, retrying in 10s...');
+                setTimeout(connectWebSocket, 10000);
+                return;
+            }
+            
             const wsUrl = 'ws://localhost:8080/ws/analysis';
             
             console.log('Connecting to WebSocket:', wsUrl);
@@ -276,7 +304,6 @@
             
             ws.onopen = () => {
                 console.log('WebSocket successfully connected!');
-                errorMessage.style.display = 'none';
                 
                 if (pendingRequest) {
                     console.log('Sending pending request:', pendingRequest);
@@ -298,8 +325,6 @@
             
             ws.onerror = (error) => {
                 console.error('WebSocket error occurred:', error);
-                errorMessage.textContent = 'Connection error occurred';
-                errorMessage.style.display = 'block';
             };
             
             ws.onclose = (event) => {
@@ -375,28 +400,22 @@
                 console.log('Found card, updating values');
                 card.className = `result-card ${result.analysisResult}`;
                 
-                // 시간 업데이트
                 card.querySelector('.analysis-time').textContent = new Date(result.analysisTime).toLocaleString();
                 
-                // 현재가 업데이트
                 card.querySelector('.current-price').textContent = result.currentPrice.toFixed(2);
                 
-                // 가격 변동률
                 const priceChange = card.querySelector('.price-change');
                 priceChange.textContent = `${result.priceChangePercent.toFixed(2)}%`;
                 priceChange.className = `price-change ${result.priceChangePercent >= 0 ? 'positive' : 'negative'}`;
                 
-                // 거래량 변동률
                 const volumeChange = card.querySelector('.volume-change');
                 volumeChange.textContent = `${result.volumeChangePercent.toFixed(2)}%`;
                 volumeChange.className = `volume-change ${result.volumeChangePercent >= 0 ? 'positive' : 'negative'}`;
                 
-                // 반등 확률
                 const reboundProb = card.querySelector('.rebound-prob');
                 reboundProb.textContent = `${result.reboundProbability.toFixed(2)}%`;
                 reboundProb.className = `rebound-prob ${result.reboundProbability >= 0 ? 'positive' : 'negative'}`;
                 
-                // SMA 값 업데이트
                 const sma1 = card.querySelector('.sma-1min');
                 const sma3 = card.querySelector('.sma-3min');
                 const smaStatus = card.querySelector('.sma-status');
@@ -434,10 +453,9 @@
                 }
             };
 
-            // 새로운 웹소켓 연결 생성
             const serverUrl = new URL(API_BASE_URL);
             const wsUrl = `ws://${serverUrl.host}/ws/analysis`;
-            const cardId = `${exchange}-${currencyPair}`.toLowerCase();  // cardId 정의
+            const cardId = `${exchange}-${currencyPair}`.toLowerCase();
             
             const cardWs = new WebSocket(wsUrl);
             card.websocket = cardWs;
@@ -459,25 +477,13 @@
             
             cardWs.onerror = (error) => {
                 console.error('WebSocket error for:', cardId, error);
-                const errorDiv = card.querySelector('.error-message');
-                if (errorDiv) {
-                    errorDiv.textContent = 'Connection error occurred';
-                    errorDiv.style.display = 'block';
-                }
             };
             
             cardWs.onclose = (event) => {
                 console.log('WebSocket closed for:', cardId, 'Code:', event.code, 'Reason:', event.reason);
                 card.websocket = null;
                 
-                // 연결이 비정상적으로 종료된 경우 UI 업데이트
-                if (event.code !== 1000) {  // 1000은 정상 종료 코드
-                    const errorDiv = card.querySelector('.error-message');
-                    if (errorDiv) {
-                        errorDiv.textContent = 'Connection lost';
-                        errorDiv.style.display = 'block';
-                    }
-                    // Start 버튼 다시 표시
+                if (event.code !== 1000) {
                     card.querySelector('.start-button').style.display = 'block';
                     card.querySelector('.stop-button').style.display = 'none';
                 }
@@ -509,7 +515,6 @@
         function deleteCard(exchange, currencyPair, card) {
             console.log('Deleting card:', exchange, currencyPair);
             
-            // 1. 웹소켓이 있다면 정상적으로 중지 명령을 보내고 연결 종료
             if (card.websocket) {
                 try {
                     const stopRequest = {
@@ -520,10 +525,7 @@
                         }
                     };
                     
-                    // stop 명령 전송
                     card.websocket.send(JSON.stringify(stopRequest));
-                    
-                    // 웹소켓 연결 종료
                     card.websocket.close();
                     card.websocket = null;
                     
@@ -533,7 +535,6 @@
                 }
             }
 
-            // 2. 백엔드에 삭제 요청 전송 (옵션)
             fetch(`${API_BASE_URL}/api/analysis/stop`, {
                 method: 'POST',
                 headers: {
@@ -547,84 +548,48 @@
                 console.error('Error while sending stop request to backend:', error);
             });
 
-            // 3. UI에서 카드 제거
             card.remove();
             console.log('Card removed from UI');
         }
 
-        // 메인 폼의 시작 버튼 클릭 핸들러
+        // Exchange 선택 시 Currency Pair 옵션 업데이트
+        document.getElementById('exchange').addEventListener('change', function() {
+            const exchange = this.value;
+            const currencyPairSelect = document.getElementById('currencyPair');
+            currencyPairSelect.innerHTML = '<option value="">Select Pair</option>';
+            
+            if (exchange && exchangeConfig.exchanges[exchange]) {
+                exchangeConfig.exchanges[exchange].forEach(pair => {
+                    const option = document.createElement('option');
+                    option.value = pair;
+                    option.textContent = pair;
+                    currencyPairSelect.appendChild(option);
+                });
+            }
+        });
+
+        // Start Analysis 버튼 클릭 이벤트
         document.getElementById('startAnalysis').addEventListener('click', function() {
             const exchange = document.getElementById('exchange').value;
             const currencyPair = document.getElementById('currencyPair').value;
-            const errorMessage = document.getElementById('errorMessage');
             
-            // 모든 필수 입력값 검증
             if (!exchange || !currencyPair) {
-                errorMessage.textContent = 'Please select both Exchange and Currency Pair';
-                errorMessage.style.display = 'block';
+                alert('Please select both Exchange and Currency Pair');
                 return;
             }
-
-            // SMA 기간 검증
-            const smaShortPeriod = parseInt(document.getElementById('smaShortPeriod').value);
-            const smaLongPeriod = parseInt(document.getElementById('smaLongPeriod').value);
             
-            if (smaShortPeriod >= smaLongPeriod) {
-                errorMessage.textContent = 'Short Period must be less than Long Period';
-                errorMessage.style.display = 'block';
-                return;
+            const cardId = `${exchange}-${currencyPair}`.toLowerCase();
+            let card = document.getElementById(cardId);
+            
+            if (!card) {
+                card = createAnalysisCard(exchange, currencyPair);
             }
-
-            // 에러 메시지 숨기기
-            errorMessage.style.display = 'none';
-
-            // 카드 생성 및 분석 시작
-            const card = createAnalysisCard(exchange, currencyPair);
+            
             startAnalysis(exchange, currencyPair, card);
         });
 
-        // Exchange 선택 이벤트 핸들러 수정
-        document.getElementById('exchange').addEventListener('change', function() {
-            const selectedExchange = this.value;
-            const currencyPairSelect = document.getElementById('currencyPair');
-            const errorMessage = document.getElementById('errorMessage');
-            
-            console.log('Selected exchange:', selectedExchange);
-            
-            errorMessage.style.display = 'none';
-            currencyPairSelect.innerHTML = '<option value="">Select Pair</option>';
-            
-            if (selectedExchange && exchangeConfig) {  // exchangeConfig null 체크 추가
-                const baseCurrency = selectedExchange === 'BINANCE' ? 'USDT' : 'KRW';
-                const symbols = exchangeConfig.symbols;
-                
-                if (symbols && symbols.length > 0) {
-                    symbols.forEach(symbol => {
-                        if (symbol !== baseCurrency) {
-                            const option = document.createElement('option');
-                            option.value = `${baseCurrency}-${symbol}`;
-                            option.textContent = `${baseCurrency}-${symbol}`;
-                            currencyPairSelect.appendChild(option);
-                        }
-                    });
-                } else {
-                    errorMessage.textContent = 'No currency pairs available for selected exchange';
-                    errorMessage.style.display = 'block';
-                }
-            }
-        });
-
-        // Currency Pair 선택 이벤트 핸들러 추가
-        document.getElementById('currencyPair').addEventListener('change', function() {
-            const errorMessage = document.getElementById('errorMessage');
-            errorMessage.style.display = 'none';
-        });
-
-        // 페이지 로드시 초기 설정
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('Page loaded, initializing...');
-            loadExchangeConfig();
-        });
+        // 페이지 로드 시 설정 로드
+        loadExchangeConfig();
     </script>
 </body>
 </html> 

@@ -12,12 +12,15 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.example.boot.exchange.layer6_analysis.dto.AnalysisRequest;
 import com.example.boot.exchange.layer6_analysis.service.MarketAnalysisService;
+import com.example.boot.web.controller.InfrastructureStatusController;
+import com.example.boot.web.dto.StatusResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.Disposable;
+import reactor.core.publisher.Mono;
 
 @Slf4j
 @Component
@@ -25,6 +28,7 @@ import reactor.core.Disposable;
 public class AnalysisWebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final MarketAnalysisService marketAnalysisService;
+    private final InfrastructureStatusController infraStatus;
     private final Map<WebSocketSession, AnalysisRequest> activeAnalysis = new ConcurrentHashMap<>();
     private final Map<WebSocketSession, Disposable> subscriptions = new ConcurrentHashMap<>();
 
@@ -48,6 +52,24 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void startRealtimeAnalysis(WebSocketSession session, AnalysisRequest request) {
+        // 인프라 상태 체크
+        StatusResponse status = infraStatus.getStatus();
+        if (!status.isValid()) {
+            try {
+                String errorMessage = objectMapper.writeValueAsString(Map.of(
+                    "error", "Services unavailable",
+                    "details", String.format("Required services are down (Redis: %s, Kafka: %s)", 
+                        status.isRedisOk() ? "UP" : "DOWN",
+                        status.isKafkaOk() ? "UP" : "DOWN")
+                ));
+                session.sendMessage(new TextMessage(errorMessage));
+                return;
+            } catch (IOException e) {
+                log.error("Failed to send error message", e);
+                return;
+            }
+        }
+
         stopRealtimeAnalysis(session);  // 기존 분석 중지
         activeAnalysis.put(session, request);
 
@@ -56,9 +78,20 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
             request.getCurrencyPair(),
             request.getPriceDropThreshold(),
             request.getVolumeIncreaseThreshold(),
-            request.getSmaShortPeriod(),    // 추가
-            request.getSmaLongPeriod()      // 추가
-        ).subscribe(result -> {
+            request.getSmaShortPeriod(),
+            request.getSmaLongPeriod()
+        ).onErrorResume(error -> {
+            log.error("Analysis error", error);
+            try {
+                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(Map.of(
+                    "error", "Analysis failed",
+                    "details", error.getMessage()
+                ))));
+            } catch (IOException e) {
+                log.error("Failed to send error message", e);
+            }
+            return Mono.empty();
+        }).subscribe(result -> {
             try {
                 session.sendMessage(new TextMessage(objectMapper.writeValueAsString(result)));
             } catch (IOException e) {

@@ -196,7 +196,12 @@
 <body>
     <div class="container">
         <div class="controls">
-            <span id="status" class="disconnected">Disconnected</span>
+            <div class="status-panel">
+                <p>WebSocket: <span id="wsStatus">Disconnected</span></p>
+                <p>Redis: <span id="redisStatus">Checking...</span></p>
+                <p>Kafka: <span id="kafkaStatus">Checking...</span></p>
+                <p>Node Role: <span id="nodeRole">Unknown</span></p>
+            </div>
             <button onclick="connect()" id="connectBtn">Connect</button>
             <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
             <div class="currency-selector">
@@ -252,15 +257,30 @@
         let priceData = {};
         let lastPrices = {};
 
-        function connect() {
+        async function checkInfraStatus() {
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/trading/mode/status');
+                const status = await response.json();
+                
+                document.getElementById('redisStatus').textContent = status.redisOk ? 'UP' : 'DOWN';
+                document.getElementById('kafkaStatus').textContent = status.kafkaOk ? 'UP' : 'DOWN';
+                document.getElementById('nodeRole').textContent = status.leaderOk ? 'LEADER' : 'FOLLOWER';
+                
+                return status.leaderOk; // 리더 노드일 때만 연결
+            } catch (error) {
+                console.error('Failed to check infrastructure status:', error);
+                return false;
+            }
+        }
+
+        async function connect() {
             if (ws && ws.readyState === WebSocket.OPEN) return;
 
             priceData = {};  // 연결 시작할 때만 초기화
             ws = new WebSocket('ws://localhost:8080/ws/exchange');
             
             ws.onopen = () => {
-                document.getElementById('status').textContent = 'Connected';
-                document.getElementById('status').className = 'connected';
+                document.getElementById('wsStatus').textContent = 'Connected';
                 document.getElementById('connectBtn').disabled = true;
                 document.getElementById('disconnectBtn').disabled = false;
             };
@@ -275,8 +295,7 @@
             };
             
             ws.onclose = () => {
-                document.getElementById('status').textContent = 'Disconnected';
-                document.getElementById('status').className = 'disconnected';
+                document.getElementById('wsStatus').textContent = 'Disconnected';
                 document.getElementById('connectBtn').disabled = false;
                 document.getElementById('disconnectBtn').disabled = true;
             };
