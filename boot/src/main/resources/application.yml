@@ -116,6 +116,11 @@ spring:
   config:
     activate:
       on-profile: docker
+  kafka:
+    bootstrap-servers: kafka:9092
+  redis:
+    host: redis    # localhost가 아닌 redis 컨테이너 이름
+    port: 6379
 cors:
   allowed-origins: http://localhost:5173  # Docker 환경의 프론트엔드 주소
 

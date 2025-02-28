@@ -41,18 +41,22 @@ public class TradingModeService {
 
     @Scheduled(fixedRate = 10000)  // 10초마다 체크
     public void checkAndUpdateMode() {
-        boolean isValid = isKafkaMode() && isRedisAvailable() && isLeader();
+        // Redis 상태와 관계없이 Kafka 모드와 리더 상태만 체크
+        boolean isValid = isKafkaMode() && isLeader();
         if (!isValid) {
-            log.info("Infrastructure status changed - Redis: {}, Leader: {}", isRedisAvailable(), isLeader());
-            eventPublisher.publishEvent(new InfrastructureStatusChangeEvent(false, false));
+            log.info("Infrastructure status changed - Leader: {}", isLeader());
+            // eventPublisher.publishEvent(new InfrastructureStatusChangeEvent(false, false));
         }
     }
 
     public boolean isValidMode() {
-        boolean redisOk = isRedisAvailable();
         boolean kafkaOk = isKafkaMode();
         boolean leaderOk = isLeader();
-        boolean isValid = kafkaOk && redisOk && leaderOk;
+        // Redis 상태는 로깅만 하고 판단에는 사용하지 않음
+        boolean redisOk = isRedisAvailable();
+        
+        // Redis 상태와 관계없이 Kafka 모드이고 리더면 valid
+        boolean isValid = kafkaOk && leaderOk;
         
         scheduledLogger.scheduleLog(log, "Trading mode status - Valid: {}, Kafka: {}, Redis: {}, Leader: {}", 
             isValid, kafkaOk, redisOk, leaderOk);
