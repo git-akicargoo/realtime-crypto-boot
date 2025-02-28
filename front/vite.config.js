@@ -7,7 +7,15 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true
       },
-      '/ws': {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
+      },
+      '/ws/analysis': {
+        target: 'ws://localhost:8080',
+        ws: true
+      },
+      '/ws/exchange': {
         target: 'ws://localhost:8080',
         ws: true
       }

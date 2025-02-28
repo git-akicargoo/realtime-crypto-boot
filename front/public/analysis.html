@@ -234,58 +234,41 @@
 
         async function loadExchangeConfig() {
             try {
-                // API base URL 로드
+                // config 엔드포인트
                 const configResponse = await fetch('http://localhost:8080/config');
                 const config = await configResponse.json();
                 API_BASE_URL = config.baseUrl;
                 
-                // 거래소 설정 로드
+                // API 엔드포인트 경로 수정
                 const exchangeResponse = await fetch('http://localhost:8080/api/v1/config/supported-pairs');
-                exchangeConfig = await exchangeResponse.json();  // 전역 변수에 할당
+                exchangeConfig = await exchangeResponse.json();
                 
+                console.log('Received exchange config:', exchangeConfig);  // 디버깅용
+                
+                // Exchange 선택 옵션 업데이트
                 const exchangeSelect = document.getElementById('exchange');
-                const currencyPairSelect = document.getElementById('currencyPair');
-
-                // 거래소 옵션 추가
                 exchangeSelect.innerHTML = '<option value="">Select Exchange</option>';
-                Object.keys(exchangeConfig.exchanges).forEach(exchange => {
-                    const option = document.createElement('option');
-                    option.value = exchange;
-                    option.textContent = exchange;
-                    exchangeSelect.appendChild(option);
-                });
-
-                // 거래소 선택 이벤트
-                exchangeSelect.addEventListener('change', function() {
-                    const selectedExchange = this.value;
-                    console.log('Selected exchange:', selectedExchange);
-                    
-                    currencyPairSelect.innerHTML = '<option value="">Select Pair</option>';
-                    
-                    if (selectedExchange && exchangeConfig.exchanges[selectedExchange]) {
-                        const baseCurrency = selectedExchange === 'BINANCE' ? 'USDT' : 'KRW';
-                        const symbols = exchangeConfig.symbols;
-                        
-                        symbols.forEach(symbol => {
-                            if (symbol !== baseCurrency) {  // 기준 통화는 제외
-                                const option = document.createElement('option');
-                                option.value = `${baseCurrency}-${symbol}`;
-                                option.textContent = `${baseCurrency}-${symbol}`;
-                                currencyPairSelect.appendChild(option);
-                            }
-                        });
-                    }
-                });
+                
+                // exchanges 객체의 키(거래소 이름)를 배열로 변환하여 사용
+                if (exchangeConfig.exchanges) {
+                    Object.keys(exchangeConfig.exchanges).forEach(exchange => {
+                        const option = document.createElement('option');
+                        option.value = exchange;
+                        option.textContent = exchange;
+                        exchangeSelect.appendChild(option);
+                    });
+                }
             } catch (error) {
                 console.error('Failed to load exchange config:', error);
-                errorMessage.textContent = 'Failed to load exchange configuration';
+                const errorMessage = document.getElementById('errorMessage');
+                errorMessage.textContent = 'Failed to load configuration';
                 errorMessage.style.display = 'block';
             }
         }
 
         function connectWebSocket() {
-            const serverUrl = new URL(API_BASE_URL);
-            const wsUrl = `ws://${serverUrl.host}/ws/analysis`;
+            // WebSocket도 직접 8080 포트로 연결
+            const wsUrl = 'ws://localhost:8080/ws/analysis';
             
             console.log('Connecting to WebSocket:', wsUrl);
             
