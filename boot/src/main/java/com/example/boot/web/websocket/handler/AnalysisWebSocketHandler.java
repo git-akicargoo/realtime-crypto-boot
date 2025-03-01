@@ -10,7 +10,9 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import com.example.boot.exchange.layer1_core.model.CurrencyPair;
 import com.example.boot.exchange.layer6_analysis.dto.AnalysisRequest;
+import com.example.boot.exchange.layer6_analysis.dto.AnalysisResponse;
 import com.example.boot.exchange.layer6_analysis.service.MarketAnalysisService;
 import com.example.boot.web.controller.InfrastructureStatusController;
 import com.example.boot.web.dto.StatusResponse;
@@ -71,6 +73,13 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
         }
 
         stopRealtimeAnalysis(session);  // 기존 분석 중지
+        
+        // CurrencyPair 객체 생성
+        CurrencyPair currencyPair = request.toCurrencyPair();
+        if (currencyPair != null) {
+            request.setCurrencyPair(currencyPair.toString());
+        }
+        
         activeAnalysis.put(session, request);
 
         Disposable subscription = marketAnalysisService.startRealtimeAnalysis(
@@ -93,6 +102,26 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
             return Mono.empty();
         }).subscribe(result -> {
             try {
+                // 응답에 symbol과 quoteCurrency 추가
+                if (request.getSymbol() != null && request.getQuoteCurrency() != null) {
+                    result = AnalysisResponse.builder()
+                        .exchange(result.getExchange())
+                        .currencyPair(result.getCurrencyPair())
+                        .symbol(request.getSymbol())
+                        .quoteCurrency(request.getQuoteCurrency())
+                        .analysisTime(result.getAnalysisTime())
+                        .currentPrice(result.getCurrentPrice())
+                        .priceChangePercent(result.getPriceChangePercent())
+                        .volumeChangePercent(result.getVolumeChangePercent())
+                        .reboundProbability(result.getReboundProbability())
+                        .analysisResult(result.getAnalysisResult())
+                        .message(result.getMessage())
+                        .sma1Difference(result.getSma1Difference())
+                        .sma3Difference(result.getSma3Difference())
+                        .smaBreakout(result.isSmaBreakout())
+                        .build();
+                }
+                
                 session.sendMessage(new TextMessage(objectMapper.writeValueAsString(result)));
             } catch (IOException e) {
                 log.error("Failed to send analysis result", e);

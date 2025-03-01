@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Market Analysis</title>
     <style>
         :root {
@@ -185,45 +187,48 @@
                     <li>Message Broker (Kafka)</li>
                 </ul>
             </div>
-            <form id="analysisForm">
+            <div class="form-container">
                 <div class="form-group">
-                    <label for="exchange">Exchange:</label>
+                    <label for="exchange">거래소:</label>
                     <select id="exchange" required>
-                        <option value="">Select Exchange</option>
+                        <option value="">거래소 선택</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="currencyPair">Currency Pair:</label>
-                    <select id="currencyPair" required>
-                        <option value="">Select Pair</option>
+                    <label for="quoteCurrency">화폐:</label>
+                    <select id="quoteCurrency" required disabled>
+                        <option value="">화폐 선택</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Price Drop Threshold (%)</label>
-                    <input type="number" id="priceDropThreshold" value="-1.0" step="0.1" required>
+                    <label for="symbol">코인:</label>
+                    <select id="symbol" required disabled>
+                        <option value="">코인 선택</option>
+                    </select>
                 </div>
                 <div class="form-group">
-                    <label>Volume Increase Threshold (%)</label>
-                    <input type="number" id="volumeIncreaseThreshold" value="50.0" step="0.1" required>
+                    <label for="priceDropThreshold">가격 하락 임계값 (%):</label>
+                    <input type="number" id="priceDropThreshold" value="3" min="0.1" max="20" step="0.1">
                 </div>
                 <div class="form-group">
-                    <label>SMA Short Period (minutes)</label>
-                    <input type="number" id="smaShortPeriod" value="1" min="1" max="60" required>
+                    <label for="volumeIncreaseThreshold">거래량 증가 임계값 (%):</label>
+                    <input type="number" id="volumeIncreaseThreshold" value="10" min="1" max="100" step="1">
                 </div>
                 <div class="form-group">
-                    <label>SMA Long Period (minutes)</label>
-                    <input type="number" id="smaLongPeriod" value="3" min="1" max="60" required>
+                    <label for="smaShortPeriod">단기 SMA 기간 (분):</label>
+                    <input type="number" id="smaShortPeriod" value="1" min="1" max="60" step="1">
                 </div>
-                <div class="button-group">
-                    <button type="button" id="startAnalysis">Start Analysis</button>
-                    <button type="button" id="stopAnalysis" style="display: none; background: #ef4444;">Stop Analysis</button>
+                <div class="form-group">
+                    <label for="smaLongPeriod">장기 SMA 기간 (분):</label>
+                    <input type="number" id="smaLongPeriod" value="3" min="1" max="60" step="1">
                 </div>
-            </form>
+                <button id="startAnalysis">분석 시작</button>
+            </div>
         </div>
 
         <div class="results-panel">
             <h2>Analysis Results</h2>
-            <div id="resultsList"></div>
+            <div id="results"></div>
         </div>
 
         <div class="status-panel">
@@ -241,29 +246,59 @@
         let pendingRequest = null;
         const startButton = document.getElementById('startAnalysis');
         const stopButton = document.getElementById('stopAnalysis');
-        const resultsList = document.getElementById('resultsList');
+        const resultsList = document.getElementById('results');
         let API_BASE_URL;
         let exchangeConfig = null;
 
+        // 환경에 따른 API URL 설정
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            API_BASE_URL = 'http://localhost:8080';
+        } else {
+            API_BASE_URL = window.location.origin;
+        }
+        
+        // 거래소 설정 로드 함수 수정
         async function loadExchangeConfig() {
             try {
-                const configResponse = await fetch('http://localhost:8080/config');
-                const config = await configResponse.json();
-                API_BASE_URL = config.baseUrl;
+                const exchangeResponse = await fetch(`${API_BASE_URL}/api/v1/config/supported-pairs`);
+                const data = await exchangeResponse.json();
                 
-                const exchangeResponse = await fetch('http://localhost:8080/api/v1/config/supported-pairs');
-                exchangeConfig = await exchangeResponse.json();
+                // 백엔드 응답 구조를 프론트엔드에 맞게 변환
+                const formattedConfig = {
+                    exchanges: Object.keys(data.exchanges),
+                    currencies: {},
+                    symbols: data.symbols,
+                    // 화폐별 지원 코인 목록 추가
+                    supportedSymbolsByCurrency: {}
+                };
                 
-                console.log('Received exchange config:', exchangeConfig);
+                // 각 거래소별 화폐 설정
+                for (const [exchange, currencies] of Object.entries(data.exchanges)) {
+                    formattedConfig.currencies[exchange.toLowerCase()] = currencies;
+                    
+                    // 각 화폐별 지원 코인 목록 초기화
+                    if (!formattedConfig.supportedSymbolsByCurrency[exchange.toLowerCase()]) {
+                        formattedConfig.supportedSymbolsByCurrency[exchange.toLowerCase()] = {};
+                    }
+                    
+                    // 임시로 모든 화폐가 모든 코인을 지원한다고 가정
+                    // 실제로는 백엔드에서 이 정보를 제공해야 함
+                    currencies.forEach(currency => {
+                        formattedConfig.supportedSymbolsByCurrency[exchange.toLowerCase()][currency] = data.symbols;
+                    });
+                }
+                
+                exchangeConfig = formattedConfig;
+                console.log('Formatted exchange config:', exchangeConfig);
                 
                 const exchangeSelect = document.getElementById('exchange');
-                exchangeSelect.innerHTML = '<option value="">Select Exchange</option>';
+                exchangeSelect.innerHTML = '<option value="">거래소 선택</option>';
                 
                 if (exchangeConfig.exchanges) {
-                    Object.keys(exchangeConfig.exchanges).forEach(exchange => {
+                    exchangeConfig.exchanges.forEach(exchange => {
                         const option = document.createElement('option');
                         option.value = exchange;
-                        option.textContent = exchange;
+                        option.textContent = exchange.toUpperCase();
                         exchangeSelect.appendChild(option);
                     });
                 }
@@ -271,7 +306,79 @@
                 console.error('Failed to load exchange config:', error);
             }
         }
-
+        
+        // Exchange 선택 시 화폐 옵션만 업데이트하고 활성화
+        document.getElementById('exchange').addEventListener('change', function() {
+            const exchange = this.value;
+            const quoteCurrencySelect = document.getElementById('quoteCurrency');
+            const symbolSelect = document.getElementById('symbol');
+            
+            quoteCurrencySelect.innerHTML = '<option value="">화폐 선택</option>';
+            symbolSelect.innerHTML = '<option value="">코인 선택</option>';
+            
+            // 화폐 선택란 활성화/비활성화
+            if (exchange) {
+                quoteCurrencySelect.disabled = false;
+                
+                // 화폐 옵션 설정
+                const currencies = exchangeConfig.currencies[exchange.toLowerCase()];
+                if (currencies) {
+                    currencies.forEach(currency => {
+                        const option = document.createElement('option');
+                        option.value = currency;
+                        option.textContent = currency;
+                        quoteCurrencySelect.appendChild(option);
+                    });
+                }
+            } else {
+                quoteCurrencySelect.disabled = true;
+            }
+            
+            // 코인 선택란은 항상 비활성화
+            symbolSelect.disabled = true;
+        });
+        
+        // 화폐 선택 시 해당 화폐에서 지원하는 코인 목록 업데이트하고 활성화
+        document.getElementById('quoteCurrency').addEventListener('change', function() {
+            const exchange = document.getElementById('exchange').value;
+            const quoteCurrency = this.value;
+            const symbolSelect = document.getElementById('symbol');
+            
+            symbolSelect.innerHTML = '<option value="">코인 선택</option>';
+            
+            // 코인 선택란 활성화/비활성화
+            if (quoteCurrency) {
+                symbolSelect.disabled = false;
+                
+                // 선택된 거래소와 화폐에 대한 지원 코인 목록 가져오기
+                const supportedSymbols = exchangeConfig.supportedSymbolsByCurrency[exchange.toLowerCase()][quoteCurrency];
+                
+                if (supportedSymbols) {
+                    // 선택된 화폐와 동일한 코인은 제외하고 목록 생성
+                    supportedSymbols.forEach(symbol => {
+                        // 화폐와 코인이 동일한 경우 제외
+                        if (symbol !== quoteCurrency) {
+                            const option = document.createElement('option');
+                            option.value = symbol;
+                            option.textContent = symbol;
+                            symbolSelect.appendChild(option);
+                        }
+                    });
+                    
+                    // 선택 가능한 코인이 없는 경우 메시지 표시
+                    if (symbolSelect.options.length <= 1) {
+                        const option = document.createElement('option');
+                        option.value = "";
+                        option.textContent = "선택 가능한 코인이 없습니다";
+                        option.disabled = true;
+                        symbolSelect.appendChild(option);
+                    }
+                }
+            } else {
+                symbolSelect.disabled = true;
+            }
+        });
+        
         async function checkInfraStatus() {
             try {
                 const response = await fetch('http://localhost:8080/api/v1/trading/mode/status');
@@ -334,7 +441,7 @@
             };
         }
 
-        function createAnalysisCard(exchange, currencyPair) {
+        function createAnalysisCard(exchange, currencyPair, symbol, quoteCurrency, displayPair) {
             const cardId = `${exchange}-${currencyPair}`.toLowerCase();
             const smaShortPeriod = document.getElementById('smaShortPeriod').value;
             const smaLongPeriod = document.getElementById('smaLongPeriod').value;
@@ -347,47 +454,47 @@
             
             card.innerHTML = `
                 <div class="result-header">
-                    <strong>${exchange.toUpperCase()} - ${currencyPair}</strong>
+                    <strong>${exchange.toUpperCase()} - ${displayPair}</strong>
                     <span class="analysis-time">-</span>
-                    <button class="delete-button" onclick="deleteCard('${exchange}', '${currencyPair}', this.parentElement.parentElement)">×</button>
+                    <button class="delete-button" onclick="deleteCard('${exchange}', '${currencyPair}', '${symbol}', '${quoteCurrency}', this.parentElement.parentElement)">×</button>
                 </div>
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <span class="stat-label">Current Price:</span>
+                        <span class="stat-label">현재 가격:</span>
                         <span class="current-price">-</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">Price Change:</span>
+                        <span class="stat-label">가격 변화:</span>
                         <span class="price-change">-</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">Volume Change:</span>
+                        <span class="stat-label">거래량 변화:</span>
                         <span class="volume-change">-</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">Rebound Prob:</span>
+                        <span class="stat-label">반등 확률:</span>
                         <span class="rebound-prob">-</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">SMA ${smaShortPeriod}min:</span>
-                        <span class="sma-1min">-</span>
+                        <span class="stat-label">SMA ${smaShortPeriod}분:</span>
+                        <span class="sma-short">-</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">SMA ${smaLongPeriod}min:</span>
-                        <span class="sma-3min">-</span>
+                        <span class="stat-label">SMA ${smaLongPeriod}분:</span>
+                        <span class="sma-long">-</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">Status:</span>
+                        <span class="stat-label">상태:</span>
                         <span class="sma-status">-</span>
                     </div>
                 </div>
                 <div class="control-buttons">
-                    <button class="start-button" onclick="startAnalysis('${exchange}', '${currencyPair}', this.parentElement.parentElement)">Start</button>
-                    <button class="stop-button" style="display: none;" onclick="stopAnalysis('${exchange}', '${currencyPair}', this.parentElement.parentElement)">Stop</button>
+                    <button class="start-button" onclick="startAnalysis('${exchange}', '${currencyPair}', '${symbol}', '${quoteCurrency}', this.parentElement.parentElement)">시작</button>
+                    <button class="stop-button" style="display: none;" onclick="stopAnalysis('${exchange}', '${currencyPair}', '${symbol}', '${quoteCurrency}', this.parentElement.parentElement)">중지</button>
                 </div>
             `;
 
-            document.getElementById('resultsList').appendChild(card);
+            document.getElementById('results').appendChild(card);
             return card;
         }
 
@@ -416,16 +523,16 @@
                 reboundProb.textContent = `${result.reboundProbability.toFixed(2)}%`;
                 reboundProb.className = `rebound-prob ${result.reboundProbability >= 0 ? 'positive' : 'negative'}`;
                 
-                const sma1 = card.querySelector('.sma-1min');
-                const sma3 = card.querySelector('.sma-3min');
+                const smaShort = card.querySelector('.sma-short');
+                const smaLong = card.querySelector('.sma-long');
                 const smaStatus = card.querySelector('.sma-status');
                 
-                if (sma1 && sma3 && smaStatus) {
-                    sma1.textContent = `${result.sma1Difference.toFixed(2)}%`;
-                    sma1.className = `sma-1min ${result.sma1Difference >= 0 ? 'positive' : 'negative'}`;
+                if (smaShort && smaLong && smaStatus) {
+                    smaShort.textContent = `${result.sma1Difference.toFixed(2)}%`;
+                    smaShort.className = `sma-short ${result.sma1Difference >= 0 ? 'positive' : 'negative'}`;
                     
-                    sma3.textContent = `${result.sma3Difference.toFixed(2)}%`;
-                    sma3.className = `sma-3min ${result.sma3Difference >= 0 ? 'positive' : 'negative'}`;
+                    smaLong.textContent = `${result.sma3Difference.toFixed(2)}%`;
+                    smaLong.className = `sma-long ${result.sma3Difference >= 0 ? 'positive' : 'negative'}`;
                     
                     if (result.smaBreakout) {
                         smaStatus.textContent = "BREAKOUT";
@@ -440,12 +547,14 @@
             }
         }
 
-        function startAnalysis(exchange, currencyPair, card) {
+        function startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card) {
             const request = {
                 command: 'start',
                 data: {
                     exchange: exchange,
                     currencyPair: currencyPair,
+                    symbol: symbol,
+                    quoteCurrency: quoteCurrency,
                     priceDropThreshold: parseFloat(document.getElementById('priceDropThreshold').value),
                     volumeIncreaseThreshold: parseFloat(document.getElementById('volumeIncreaseThreshold').value),
                     smaShortPeriod: parseInt(document.getElementById('smaShortPeriod').value),
@@ -457,49 +566,87 @@
             const wsUrl = `ws://${serverUrl.host}/ws/analysis`;
             const cardId = `${exchange}-${currencyPair}`.toLowerCase();
             
+            // 기존 웹소켓이 있다면 정리
+            if (card.websocket) {
+                try {
+                    card.websocket.close();
+                } catch (e) {
+                    console.warn('Error closing existing websocket:', e);
+                }
+            }
+            
             const cardWs = new WebSocket(wsUrl);
             card.websocket = cardWs;
             
-            cardWs.onopen = () => {
-                console.log('WebSocket connected for:', cardId);
-                cardWs.send(JSON.stringify(request));
-            };
+            // 연결 재시도 로직 추가
+            let retryCount = 0;
+            const maxRetries = 3;
             
-            cardWs.onmessage = (event) => {
-                console.log('Received WebSocket message for:', cardId);
-                try {
-                    const result = JSON.parse(event.data);
-                    updateAnalysisCard(result);
-                } catch (error) {
-                    console.error('Error parsing WebSocket message:', error);
-                }
-            };
-            
-            cardWs.onerror = (error) => {
-                console.error('WebSocket error for:', cardId, error);
-            };
-            
-            cardWs.onclose = (event) => {
-                console.log('WebSocket closed for:', cardId, 'Code:', event.code, 'Reason:', event.reason);
-                card.websocket = null;
+            const connectWebSocket = () => {
+                cardWs.onopen = () => {
+                    console.log('WebSocket connected for:', cardId);
+                    retryCount = 0;
+                    cardWs.send(JSON.stringify(request));
+                    
+                    // 연결 확인을 위한 ping 메시지 전송
+                    const pingInterval = setInterval(() => {
+                        if (cardWs.readyState === WebSocket.OPEN) {
+                            cardWs.send(JSON.stringify({ command: 'ping' }));
+                        } else {
+                            clearInterval(pingInterval);
+                        }
+                    }, 30000);
+                };
                 
-                if (event.code !== 1000) {
-                    card.querySelector('.start-button').style.display = 'block';
-                    card.querySelector('.stop-button').style.display = 'none';
-                }
+                cardWs.onmessage = (event) => {
+                    console.log('Received WebSocket message for:', cardId, event.data);
+                    try {
+                        const result = JSON.parse(event.data);
+                        if (result.command === 'pong') {
+                            console.log('Received pong from server');
+                            return;
+                        }
+                        updateAnalysisCard(result);
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error);
+                    }
+                };
+                
+                cardWs.onerror = (error) => {
+                    console.error('WebSocket error for:', cardId, error);
+                };
+                
+                cardWs.onclose = (event) => {
+                    console.log('WebSocket closed for:', cardId, 'Code:', event.code, 'Reason:', event.reason);
+                    clearInterval(pingInterval);
+                    
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        console.log(`Retrying connection (${retryCount}/${maxRetries})...`);
+                        setTimeout(connectWebSocket, 2000 * retryCount);
+                    } else {
+                        card.querySelector('.start-button').style.display = 'block';
+                        card.querySelector('.stop-button').style.display = 'none';
+                        alert(`Failed to connect after ${maxRetries} attempts. Please try again later.`);
+                    }
+                };
             };
-
+            
+            connectWebSocket();
+            
             card.querySelector('.start-button').style.display = 'none';
             card.querySelector('.stop-button').style.display = 'block';
         }
 
-        function stopAnalysis(exchange, currencyPair, card) {
+        function stopAnalysis(exchange, currencyPair, symbol, quoteCurrency, card) {
             if (card.websocket) {
                 const request = {
                     command: 'stop',
                     data: {
                         exchange: exchange,
-                        currencyPair: currencyPair
+                        currencyPair: currencyPair,
+                        symbol: symbol,
+                        quoteCurrency: quoteCurrency
                     }
                 };
                 
@@ -512,7 +659,7 @@
             card.querySelector('.stop-button').style.display = 'none';
         }
 
-        function deleteCard(exchange, currencyPair, card) {
+        function deleteCard(exchange, currencyPair, symbol, quoteCurrency, card) {
             console.log('Deleting card:', exchange, currencyPair);
             
             if (card.websocket) {
@@ -521,7 +668,9 @@
                         command: 'stop',
                         data: {
                             exchange: exchange,
-                            currencyPair: currencyPair
+                            currencyPair: currencyPair,
+                            symbol: symbol,
+                            quoteCurrency: quoteCurrency
                         }
                     };
                     
@@ -552,44 +701,38 @@
             console.log('Card removed from UI');
         }
 
-        // Exchange 선택 시 Currency Pair 옵션 업데이트
-        document.getElementById('exchange').addEventListener('change', function() {
-            const exchange = this.value;
-            const currencyPairSelect = document.getElementById('currencyPair');
-            currencyPairSelect.innerHTML = '<option value="">Select Pair</option>';
-            
-            if (exchange && exchangeConfig.exchanges[exchange]) {
-                exchangeConfig.exchanges[exchange].forEach(pair => {
-                    const option = document.createElement('option');
-                    option.value = pair;
-                    option.textContent = pair;
-                    currencyPairSelect.appendChild(option);
-                });
-            }
-        });
+        // 페이지 로드 시 설정 로드
+        loadExchangeConfig();
 
-        // Start Analysis 버튼 클릭 이벤트
+        // 분석 시작 버튼 이벤트
         document.getElementById('startAnalysis').addEventListener('click', function() {
             const exchange = document.getElementById('exchange').value;
-            const currencyPair = document.getElementById('currencyPair').value;
+            const symbol = document.getElementById('symbol').value;
+            const quoteCurrency = document.getElementById('quoteCurrency').value;
             
-            if (!exchange || !currencyPair) {
-                alert('Please select both Exchange and Currency Pair');
+            if (!exchange || !symbol || !quoteCurrency) {
+                alert('거래소, 코인, 화폐를 모두 선택해주세요');
                 return;
             }
             
-            const cardId = `${exchange}-${currencyPair}`.toLowerCase();
-            let card = document.getElementById(cardId);
+            // 화면 표시용 통화쌍 형식
+            const displayPair = `${symbol}/${quoteCurrency}`;
+            // 백엔드 전송용 통화쌍 형식 (CurrencyPair.toString() 형식과 일치)
+            const currencyPair = `${quoteCurrency}-${symbol}`;
             
-            if (!card) {
-                card = createAnalysisCard(exchange, currencyPair);
+            // 이미 존재하는 카드인지 확인
+            const cardId = `${exchange}-${currencyPair}`.toLowerCase();
+            if (document.getElementById(cardId)) {
+                alert('이 페어에 대한 분석이 이미 실행 중입니다');
+                return;
             }
             
-            startAnalysis(exchange, currencyPair, card);
+            // 카드 생성
+            const card = createAnalysisCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
+            
+            // 분석 시작
+            startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card);
         });
-
-        // 페이지 로드 시 설정 로드
-        loadExchangeConfig();
     </script>
 </body>
 </html> 

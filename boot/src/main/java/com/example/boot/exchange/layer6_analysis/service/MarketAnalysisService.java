@@ -72,9 +72,24 @@ public class MarketAnalysisService {
         double smaLongDiff = calculateSMADifference(history, smaLongPeriod);
         boolean smaBreakout = isSMABreakout(smaShortDiff, smaLongDiff);
 
+        // CurrencyPair에서 symbol과 quoteCurrency 추출
+        String currencyPairStr = latestData.getCurrencyPair().toString();
+        String symbol = null;
+        String quoteCurrency = null;
+        
+        if (currencyPairStr.contains("-")) {
+            String[] parts = currencyPairStr.split("-");
+            if (parts.length == 2) {
+                quoteCurrency = parts[0];
+                symbol = parts[1];
+            }
+        }
+
         return AnalysisResponse.builder()
             .exchange(latestData.getExchange())
             .currencyPair(latestData.getCurrencyPair().toString())
+            .symbol(symbol)
+            .quoteCurrency(quoteCurrency)
             .analysisTime(LocalDateTime.now())
             .currentPrice(latestData.getPrice().doubleValue())
             .priceChangePercent(priceChange)
