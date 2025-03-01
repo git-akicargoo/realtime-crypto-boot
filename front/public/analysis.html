@@ -89,9 +89,10 @@
         .result-card {
             background: var(--bg-primary);
             border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
             border-left: 4px solid var(--accent-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
         .result-card.STRONG_REBOUND {
@@ -166,6 +167,293 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+        
+        .card-title h3 {
+            margin: 0 0 5px 0;
+            font-size: 1.2rem;
+        }
+        
+        .timestamp {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        
+        .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .card-actions button {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+        
+        .card-body {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        
+        .price-section {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        
+        .current-price {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        
+        .indicators-section h4,
+        .analysis-section h4 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+        
+        .indicators-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        
+        .indicator-group {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 6px;
+        }
+        
+        .indicator-group h5 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .indicator-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .indicator-label {
+            color: var(--text-secondary);
+        }
+        
+        .positive {
+            color: var(--up-color);
+        }
+        
+        .negative {
+            color: var(--down-color);
+        }
+        
+        .neutral {
+            color: var(--text-primary);
+        }
+        
+        .moderate {
+            color: #eab308; /* 노란색 */
+        }
+        
+        .analysis-section {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 6px;
+        }
+        
+        .trading-style,
+        .market-condition-container,
+        .analysis-result {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .buy-signal-container {
+            margin-bottom: 15px;
+        }
+        
+        .signal-label,
+        .condition-label,
+        .style-label,
+        .result-label {
+            color: var(--text-secondary);
+        }
+        
+        .signal-strength-container {
+            height: 20px;
+            background: var(--bg-primary);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 8px;
+            position: relative;
+        }
+        
+        .signal-strength-bar {
+            height: 100%;
+            background: var(--accent-color);
+            transition: width 0.5s ease;
+        }
+        
+        .signal-strength-bar.strong-buy {
+            background: var(--up-color);
+        }
+        
+        .signal-strength-bar.moderate-buy {
+            background: #eab308; /* 노란색 */
+        }
+        
+        .signal-strength-bar.weak-buy {
+            background: var(--down-color);
+        }
+        
+        .signal-strength-value {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--text-primary);
+            text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 기존 스타일 유지하면서 카드 크기와 레이아웃 개선 */
+        .analysis-card {
+            width: 300px;
+            max-width: 100%;
+            height: auto;
+            margin: 10px;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            background-color: #fff;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* 카드 헤더 스타일 개선 */
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+        
+        .card-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* 카드 내용 스타일 개선 */
+        .card-content {
+            font-size: 14px;
+        }
+        
+        /* 버튼 스타일 개선 */
+        .action-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        
+        .action-button {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .start-button {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .stop-button {
+            background-color: #f44336;
+            color: white;
+            display: none;
+        }
+        
+        .delete-button {
+            background-color: #9e9e9e;
+            color: white;
+        }
+        
+        /* 지표 섹션 스타일 개선 */
+        .indicators-section {
+            margin-top: 10px;
+            font-size: 13px;
+        }
+        
+        .indicator-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        
+        .indicator-label {
+            color: #666;
+        }
+        
+        /* 카드 그리드 레이아웃 개선 */
+        .analysis-cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            padding: 15px;
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+        
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+            .analysis-cards-container {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            }
+            
+            .analysis-card {
+                width: 100%;
+                margin: 5px 0;
+            }
+        }
+        
+        /* 기존 스타일 유지 */
+        .positive {
+            color: #4CAF50;
+        }
+        
+        .negative {
+            color: #f44336;
+        }
+        
+        .neutral {
+            color: #9e9e9e;
+        }
     </style>
 </head>
 <body>
@@ -222,13 +510,23 @@
                     <label for="smaLongPeriod">장기 SMA 기간 (분):</label>
                     <input type="number" id="smaLongPeriod" value="3" min="1" max="60" step="1">
                 </div>
+                <div class="form-group">
+                    <label>트레이딩 스타일:</label>
+                    <select id="tradingStyle">
+                        <option value="SCALPING">초단타 (Scalping)</option>
+                        <option value="DAY_TRADING">단타 (Day Trading)</option>
+                        <option value="SWING">스윙 (Swing Trading)</option>
+                    </select>
+                </div>
                 <button id="startAnalysis">분석 시작</button>
             </div>
         </div>
 
-        <div class="results-panel">
+        <div class="container mt-4">
             <h2>Analysis Results</h2>
-            <div id="results"></div>
+            <div id="analysis-results" class="analysis-cards-container">
+                <!-- 여기에 분석 결과 카드가 추가됩니다 -->
+            </div>
         </div>
 
         <div class="status-panel">
@@ -443,111 +741,395 @@
 
         function createAnalysisCard(exchange, currencyPair, symbol, quoteCurrency, displayPair) {
             const cardId = `${exchange}-${currencyPair}`.toLowerCase();
-            const smaShortPeriod = document.getElementById('smaShortPeriod').value;
-            const smaLongPeriod = document.getElementById('smaLongPeriod').value;
-            
-            console.log('Creating card with ID:', cardId);
-            
             const card = document.createElement('div');
-            card.className = 'result-card';
             card.id = cardId;
+            card.className = 'result-card';
             
+            // 트레이딩 스타일 정보 추가
+            const tradingStyle = document.getElementById('tradingStyle').value;
+            const tradingStyleText = {
+                'SCALPING': '초단타 (Scalping)',
+                'DAY_TRADING': '단타 (Day Trading)',
+                'SWING': '스윙 (Swing Trading)'
+            }[tradingStyle];
+            
+            // 개선된 카드 레이아웃
             card.innerHTML = `
-                <div class="result-header">
-                    <strong>${exchange.toUpperCase()} - ${displayPair}</strong>
-                    <span class="analysis-time">-</span>
-                    <button class="delete-button" onclick="deleteCard('${exchange}', '${currencyPair}', '${symbol}', '${quoteCurrency}', this.parentElement.parentElement)">×</button>
-                </div>
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <span class="stat-label">현재 가격:</span>
-                        <span class="current-price">-</span>
+                <div class="card-header">
+                    <div class="card-title">
+                        <h3>${exchange} - ${displayPair}</h3>
+                        <span class="timestamp">${new Date().toLocaleString()}</span>
                     </div>
-                    <div class="stat-item">
-                        <span class="stat-label">가격 변화:</span>
-                        <span class="price-change">-</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">거래량 변화:</span>
-                        <span class="volume-change">-</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">반등 확률:</span>
-                        <span class="rebound-prob">-</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">SMA ${smaShortPeriod}분:</span>
-                        <span class="sma-short">-</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">SMA ${smaLongPeriod}분:</span>
-                        <span class="sma-long">-</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">상태:</span>
-                        <span class="sma-status">-</span>
+                    <div class="card-actions">
+                        <button class="start-button" style="display: none;">시작</button>
+                        <button class="stop-button">중지</button>
+                        <button class="delete-button">삭제</button>
                     </div>
                 </div>
-                <div class="control-buttons">
-                    <button class="start-button" onclick="startAnalysis('${exchange}', '${currencyPair}', '${symbol}', '${quoteCurrency}', this.parentElement.parentElement)">시작</button>
-                    <button class="stop-button" style="display: none;" onclick="stopAnalysis('${exchange}', '${currencyPair}', '${symbol}', '${quoteCurrency}', this.parentElement.parentElement)">중지</button>
+                
+                <div class="card-body">
+                    <div class="price-section">
+                        <div class="current-price">
+                            <span class="price-label">현재 가격:</span>
+                            <span class="price-value">로딩 중...</span>
+                        </div>
+                        <div class="price-change">
+                            <span class="change-label">가격 변화:</span>
+                            <span class="change-value">-</span>
+                        </div>
+                        <div class="volume-change">
+                            <span class="change-label">거래량 변화:</span>
+                            <span class="change-value">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="indicators-section">
+                        <h4>기술적 지표</h4>
+                        <div class="indicators-grid">
+                            <div class="indicator-group">
+                                <h5>이동평균선 (SMA)</h5>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">단기 (1분):</span>
+                                    <span class="indicator-value sma-short">-</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">중기 (3분):</span>
+                                    <span class="indicator-value sma-medium">-</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">장기 (5분):</span>
+                                    <span class="indicator-value sma-long">-</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">신호:</span>
+                                    <span class="indicator-value sma-signal">NEUTRAL</span>
+                                </div>
+                            </div>
+                            
+                            <div class="indicator-group">
+                                <h5>RSI</h5>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">현재 값:</span>
+                                    <span class="indicator-value rsi-value">-</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">상태:</span>
+                                    <span class="indicator-value rsi-signal">NEUTRAL</span>
+                                </div>
+                            </div>
+                            
+                            <div class="indicator-group">
+                                <h5>볼린저 밴드</h5>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">상단:</span>
+                                    <span class="indicator-value bb-upper">-</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">중앙:</span>
+                                    <span class="indicator-value bb-middle">-</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">하단:</span>
+                                    <span class="indicator-value bb-lower">-</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">신호:</span>
+                                    <span class="indicator-value bb-signal">INSIDE</span>
+                                </div>
+                            </div>
+                            
+                            <div class="indicator-group">
+                                <h5>거래량</h5>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">변화율:</span>
+                                    <span class="indicator-value volume-change-percent">-</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-label">신호 강도:</span>
+                                    <span class="indicator-value volume-signal">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="analysis-section">
+                        <div class="trading-style">
+                            <span class="style-label">트레이딩 스타일:</span>
+                            <span class="style-value">${tradingStyleText}</span>
+                        </div>
+                        
+                        <div class="market-condition-container">
+                            <span class="condition-label">시장 상태:</span>
+                            <span class="market-condition">NEUTRAL</span>
+                        </div>
+                        
+                        <div class="buy-signal-container">
+                            <div class="signal-label">매수 적합도:</div>
+                            <div class="signal-strength-container">
+                                <div class="signal-strength-bar" style="width: 0%"></div>
+                                <div class="signal-strength-value">0%</div>
+                            </div>
+                        </div>
+                        
+                        <div class="analysis-result">
+                            <span class="result-label">분석 결과:</span>
+                            <span class="result-value">분석 중...</span>
+                        </div>
+                    </div>
                 </div>
             `;
-
-            document.getElementById('results').appendChild(card);
+            
+            // 결과 컨테이너에 카드 추가
+            const resultsContainer = document.getElementById('analysis-results');
+            if (resultsContainer) {
+                resultsContainer.appendChild(card);
+            } else {
+                console.error('Results container not found!');
+                // 결과 컨테이너가 없으면 생성
+                const container = document.querySelector('.container');
+                if (container) {
+                    const newResultsContainer = document.createElement('div');
+                    newResultsContainer.id = 'analysis-results';
+                    newResultsContainer.className = 'analysis-cards-container';
+                    container.appendChild(newResultsContainer);
+                    newResultsContainer.appendChild(card);
+                } else {
+                    console.error('Container not found!');
+                }
+            }
+            
+            // 중지 버튼 이벤트 리스너
+            card.querySelector('.stop-button').addEventListener('click', function() {
+                stopAnalysis(exchange, currencyPair, symbol, quoteCurrency, card);
+            });
+            
+            // 삭제 버튼 이벤트 리스너
+            card.querySelector('.delete-button').addEventListener('click', function() {
+                deleteAnalysisCard(exchange, currencyPair, symbol, quoteCurrency, card);
+            });
+            
             return card;
         }
-
-        function updateAnalysisCard(result) {
-            const cardId = `${result.exchange}-${result.currencyPair}`.toLowerCase();
-            console.log('Updating card:', cardId);
-            const card = document.getElementById(cardId);
+        
+        // 웹소켓 메시지 처리 및 카드 업데이트 함수
+        function updateCardWithAnalysisResult(card, data) {
+            console.log('Updating card with data:', data);
             
-            if (card) {
-                console.log('Found card, updating values');
-                card.className = `result-card ${result.analysisResult}`;
+            // 현재 가격 업데이트
+            const priceValue = card.querySelector('.price-value');
+            if (priceValue && data.currentPrice) {
+                priceValue.textContent = formatPrice(data.currentPrice);
+            }
+            
+            // 가격 변화 업데이트
+            const priceChange = card.querySelector('.price-change .change-value');
+            if (priceChange && data.priceChangePercent !== undefined) {
+                const changeValue = data.priceChangePercent;
+                priceChange.textContent = formatPercent(changeValue);
+                priceChange.className = 'change-value ' + (changeValue > 0 ? 'positive' : changeValue < 0 ? 'negative' : 'neutral');
+            }
+            
+            // 거래량 변화 업데이트
+            const volumeChange = card.querySelector('.volume-change .change-value');
+            if (volumeChange && data.volumeChangePercent !== undefined) {
+                const changeValue = data.volumeChangePercent;
+                volumeChange.textContent = formatPercent(changeValue);
+                volumeChange.className = 'change-value ' + (changeValue > 0 ? 'positive' : changeValue < 0 ? 'negative' : 'neutral');
+            }
+            
+            // SMA 값 업데이트
+            const smaShort = card.querySelector('.sma-short');
+            if (smaShort && data.smaShortDifference !== undefined) {
+                smaShort.textContent = formatPercent(data.smaShortDifference);
+                smaShort.className = 'indicator-value sma-short ' + (data.smaShortDifference > 0 ? 'positive' : data.smaShortDifference < 0 ? 'negative' : 'neutral');
+            }
+            
+            const smaMedium = card.querySelector('.sma-medium');
+            if (smaMedium && data.smaMediumDifference !== undefined) {
+                smaMedium.textContent = formatPercent(data.smaMediumDifference);
+                smaMedium.className = 'indicator-value sma-medium ' + (data.smaMediumDifference > 0 ? 'positive' : data.smaMediumDifference < 0 ? 'negative' : 'neutral');
+            }
+            
+            const smaLong = card.querySelector('.sma-long');
+            if (smaLong && data.smaLongDifference !== undefined) {
+                smaLong.textContent = formatPercent(data.smaLongDifference);
+                smaLong.className = 'indicator-value sma-long ' + (data.smaLongDifference > 0 ? 'positive' : data.smaLongDifference < 0 ? 'negative' : 'neutral');
+            }
+            
+            // SMA 신호 업데이트
+            const smaSignal = card.querySelector('.sma-signal');
+            if (smaSignal && data.smaSignal) {
+                smaSignal.textContent = data.smaSignal || 'NEUTRAL';
+                smaSignal.className = 'indicator-value sma-signal ' + 
+                    (data.smaSignal === 'BULLISH' ? 'positive' : 
+                     data.smaSignal === 'BEARISH' ? 'negative' : 'neutral');
+            }
+            
+            // RSI 값 업데이트
+            const rsiValue = card.querySelector('.rsi-value');
+            if (rsiValue && data.rsiValue !== undefined) {
+                rsiValue.textContent = data.rsiValue > 0 ? data.rsiValue.toFixed(1) : '계산 중...';
+            }
+            
+            // RSI 신호 업데이트
+            const rsiSignal = card.querySelector('.rsi-signal');
+            if (rsiSignal && data.rsiSignal) {
+                rsiSignal.textContent = data.rsiSignal || 'NEUTRAL';
+                rsiSignal.className = 'indicator-value rsi-signal ' + 
+                    (data.rsiSignal === 'OVERSOLD' ? 'positive' : 
+                     data.rsiSignal === 'OVERBOUGHT' ? 'negative' : 'neutral');
+            }
+            
+            // 볼린저 밴드 값 업데이트
+            const bbUpper = card.querySelector('.bb-upper');
+            if (bbUpper && data.bollingerUpper !== undefined) {
+                bbUpper.textContent = data.bollingerUpper > 0 ? formatPrice(data.bollingerUpper) : '계산 중...';
+            }
+            
+            const bbMiddle = card.querySelector('.bb-middle');
+            if (bbMiddle && data.bollingerMiddle !== undefined) {
+                bbMiddle.textContent = data.bollingerMiddle > 0 ? formatPrice(data.bollingerMiddle) : '계산 중...';
+            }
+            
+            const bbLower = card.querySelector('.bb-lower');
+            if (bbLower && data.bollingerLower !== undefined) {
+                bbLower.textContent = data.bollingerLower > 0 ? formatPrice(data.bollingerLower) : '계산 중...';
+            }
+            
+            // 볼린저 밴드 신호 업데이트
+            const bbSignal = card.querySelector('.bb-signal');
+            if (bbSignal && data.bollingerSignal) {
+                bbSignal.textContent = data.bollingerSignal || 'INSIDE';
+                bbSignal.className = 'indicator-value bb-signal ' + 
+                    (data.bollingerSignal === 'LOWER_TOUCH' ? 'positive' : 
+                     data.bollingerSignal === 'UPPER_TOUCH' ? 'negative' : 'neutral');
+            }
+            
+            // 거래량 변화율 업데이트
+            const volumeChangePercent = card.querySelector('.volume-change-percent');
+            if (volumeChangePercent && data.volumeChangePercent !== undefined) {
+                volumeChangePercent.textContent = formatPercent(data.volumeChangePercent);
+                volumeChangePercent.className = 'indicator-value volume-change-percent ' + 
+                    (data.volumeChangePercent > 0 ? 'positive' : 
+                     data.volumeChangePercent < 0 ? 'negative' : 'neutral');
+            }
+            
+            // 거래량 신호 강도 업데이트
+            const volumeSignal = card.querySelector('.volume-signal');
+            if (volumeSignal) {
+                // 거래량 변화에 따른 신호 강도 계산
+                let signalStrength = 0;
                 
-                card.querySelector('.analysis-time').textContent = new Date(result.analysisTime).toLocaleString();
-                
-                card.querySelector('.current-price').textContent = result.currentPrice.toFixed(2);
-                
-                const priceChange = card.querySelector('.price-change');
-                priceChange.textContent = `${result.priceChangePercent.toFixed(2)}%`;
-                priceChange.className = `price-change ${result.priceChangePercent >= 0 ? 'positive' : 'negative'}`;
-                
-                const volumeChange = card.querySelector('.volume-change');
-                volumeChange.textContent = `${result.volumeChangePercent.toFixed(2)}%`;
-                volumeChange.className = `volume-change ${result.volumeChangePercent >= 0 ? 'positive' : 'negative'}`;
-                
-                const reboundProb = card.querySelector('.rebound-prob');
-                reboundProb.textContent = `${result.reboundProbability.toFixed(2)}%`;
-                reboundProb.className = `rebound-prob ${result.reboundProbability >= 0 ? 'positive' : 'negative'}`;
-                
-                const smaShort = card.querySelector('.sma-short');
-                const smaLong = card.querySelector('.sma-long');
-                const smaStatus = card.querySelector('.sma-status');
-                
-                if (smaShort && smaLong && smaStatus) {
-                    smaShort.textContent = `${result.sma1Difference.toFixed(2)}%`;
-                    smaShort.className = `sma-short ${result.sma1Difference >= 0 ? 'positive' : 'negative'}`;
+                if (data.volumeChangePercent !== undefined) {
+                    // 백엔드에서 값이 오지 않는 경우 프론트에서 계산
+                    const volumeChange = data.volumeChangePercent;
                     
-                    smaLong.textContent = `${result.sma3Difference.toFixed(2)}%`;
-                    smaLong.className = `sma-long ${result.sma3Difference >= 0 ? 'positive' : 'negative'}`;
-                    
-                    if (result.smaBreakout) {
-                        smaStatus.textContent = "BREAKOUT";
-                        smaStatus.className = "sma-status breakout";
+                    // 거래량 변화에 따른 신호 강도 계산 로직
+                    if (volumeChange >= 100) {
+                        signalStrength = 90.0;
+                    } else if (volumeChange >= 50) {
+                        signalStrength = 70.0;
+                    } else if (volumeChange >= 20) {
+                        signalStrength = 60.0;
+                    } else if (volumeChange >= 0) {
+                        signalStrength = 50.0 + (volumeChange / 2);
+                    } else if (volumeChange > -50) {
+                        signalStrength = Math.max(30.0, 50.0 + volumeChange / 2);
                     } else {
-                        smaStatus.textContent = "NORMAL";
-                        smaStatus.className = "sma-status";
+                        signalStrength = 20.0;
                     }
                 }
-            } else {
-                console.log('Card not found:', cardId);
+                
+                console.log('Volume change percent:', data.volumeChangePercent);
+                console.log('Calculated volume signal strength:', signalStrength);
+                
+                volumeSignal.textContent = formatPercent(signalStrength);
+                volumeSignal.className = 'indicator-value volume-signal ' + 
+                    (signalStrength >= 60 ? 'positive' : 
+                     signalStrength <= 40 ? 'negative' : 'neutral');
+            }
+            
+            // 시장 상태 업데이트
+            const marketCondition = card.querySelector('.market-condition');
+            if (marketCondition && data.marketCondition) {
+                marketCondition.textContent = data.marketCondition || 'NEUTRAL';
+                marketCondition.className = 'market-condition ' + 
+                    (data.marketCondition === 'OVERSOLD' ? 'positive' : 
+                     data.marketCondition === 'OVERBOUGHT' ? 'negative' : 'neutral');
+            }
+            
+            // 매수 적합도 업데이트
+            const buySignalStrength = card.querySelector('.signal-strength-value');
+            const buySignalBar = card.querySelector('.signal-strength-bar');
+            if (buySignalStrength && buySignalBar) {
+                // 메시지에서 매수 신호 강도 추출
+                let strength = 0;
+                
+                if (data.buySignalStrength !== undefined && data.buySignalStrength > 0) {
+                    strength = data.buySignalStrength;
+                    console.log('Using buySignalStrength from data:', strength);
+                } else if (data.message) {
+                    console.log('Trying to extract from message:', data.message);
+                    // 한글 메시지에서 매수 신호 강도 추출
+                    const regex = /매수 신호 강도: (\d+\.?\d*)%/;
+                    const match = data.message.match(regex);
+                    console.log('Regex match result:', match);
+                    
+                    if (match && match[1]) {
+                        strength = parseFloat(match[1]);
+                        console.log('Extracted strength from message:', strength);
+                    }
+                }
+                
+                console.log('Final buy signal strength:', strength);
+                
+                buySignalStrength.textContent = formatPercent(strength);
+                buySignalBar.style.width = `${strength}%`;
+                
+                // 강도에 따른 클래스 설정
+                buySignalBar.className = 'signal-strength-bar ' + 
+                    (strength >= 70 ? 'strong-buy' : 
+                     strength >= 40 ? 'moderate-buy' : 'weak-buy');
+            }
+            
+            // 분석 결과 업데이트
+            const analysisResult = card.querySelector('.result-value');
+            if (analysisResult && data.analysisResult) {
+                analysisResult.textContent = data.analysisResult || '분석 중...';
+                analysisResult.className = 'result-value ' + 
+                    (data.analysisResult === 'BUY' || data.analysisResult === 'STRONG_BUY' ? 'positive' : 
+                     data.analysisResult === 'SELL' || data.analysisResult === 'STRONG_SELL' ? 'negative' : 'neutral');
+            }
+            
+            // 로딩 인디케이터 제거
+            if (data.analysisResult) {
+                const loadingIndicator = card.querySelector('.loading-indicator');
+                if (loadingIndicator) {
+                    loadingIndicator.remove();
+                }
             }
         }
 
+        // 가격 포맷팅 함수
+        function formatPrice(price) {
+            if (price === undefined || price === null) return '-';
+            return new Intl.NumberFormat('ko-KR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(price);
+        }
+        
+        // 퍼센트 포맷팅 함수
+        function formatPercent(value) {
+            if (value === undefined || value === null) return '-';
+            return (value > 0 ? '+' : '') + value.toFixed(2) + '%';
+        }
+
         function startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card) {
+            const tradingStyle = document.getElementById('tradingStyle').value;
+            
+            console.log('Starting analysis with trading style:', tradingStyle);
+            
             const request = {
                 command: 'start',
                 data: {
@@ -555,10 +1137,8 @@
                     currencyPair: currencyPair,
                     symbol: symbol,
                     quoteCurrency: quoteCurrency,
-                    priceDropThreshold: parseFloat(document.getElementById('priceDropThreshold').value),
-                    volumeIncreaseThreshold: parseFloat(document.getElementById('volumeIncreaseThreshold').value),
-                    smaShortPeriod: parseInt(document.getElementById('smaShortPeriod').value),
-                    smaLongPeriod: parseInt(document.getElementById('smaLongPeriod').value)
+                    tradingStyle: tradingStyle // 트레이딩 스타일만 전송
+                    // 다른 파라미터는 백엔드에서 자동 설정
                 }
             };
 
@@ -586,6 +1166,7 @@
                 cardWs.onopen = () => {
                     console.log('WebSocket connected for:', cardId);
                     retryCount = 0;
+                    console.log('Sending request:', request);
                     cardWs.send(JSON.stringify(request));
                     
                     // 연결 확인을 위한 ping 메시지 전송
@@ -599,16 +1180,20 @@
                 };
                 
                 cardWs.onmessage = (event) => {
-                    console.log('Received WebSocket message for:', cardId, event.data);
                     try {
-                        const result = JSON.parse(event.data);
-                        if (result.command === 'pong') {
-                            console.log('Received pong from server');
+                        const data = JSON.parse(event.data);
+                        console.log('Received WebSocket message for:', cardId, data);
+                        
+                        // 에러 메시지 처리
+                        if (data.error) {
+                            console.error('Analysis error:', data.error, data.details);
                             return;
                         }
-                        updateAnalysisCard(result);
+                        
+                        // 결과 업데이트
+                        updateCardWithAnalysisResult(card, data);
                     } catch (error) {
-                        console.error('Error parsing WebSocket message:', error);
+                        console.error('Error parsing message:', error);
                     }
                 };
                 
@@ -659,7 +1244,7 @@
             card.querySelector('.stop-button').style.display = 'none';
         }
 
-        function deleteCard(exchange, currencyPair, symbol, quoteCurrency, card) {
+        function deleteAnalysisCard(exchange, currencyPair, symbol, quoteCurrency, card) {
             console.log('Deleting card:', exchange, currencyPair);
             
             if (card.websocket) {
@@ -704,11 +1289,85 @@
         // 페이지 로드 시 설정 로드
         loadExchangeConfig();
 
-        // 분석 시작 버튼 이벤트
+        // HTML 구조 확인 및 필요한 요소 생성
+        document.addEventListener('DOMContentLoaded', function() {
+            // 컨테이너가 있는지 확인
+            const container = document.querySelector('.container');
+            if (!container) {
+                console.error('Container not found, creating one');
+                const newContainer = document.createElement('div');
+                newContainer.className = 'container';
+                document.body.appendChild(newContainer);
+            }
+            
+            // 분석 결과 컨테이너가 있는지 확인
+            if (!document.getElementById('analysis-results')) {
+                console.log('Creating analysis results container');
+                const resultsContainer = document.createElement('div');
+                resultsContainer.id = 'analysis-results';
+                resultsContainer.className = 'analysis-cards-container';
+                document.querySelector('.container').appendChild(resultsContainer);
+            }
+            
+            // 트레이딩 스타일 외의 입력 필드를 숨김
+            const advancedFields = document.querySelectorAll('.advanced-parameter');
+            advancedFields.forEach(field => {
+                field.style.display = 'none';
+            });
+            
+            // 또는 부모 컨테이너를 찾아서 숨김
+            const advancedSection = document.querySelector('.advanced-parameters-section');
+            if (advancedSection) {
+                advancedSection.style.display = 'none';
+            }
+            
+            // 직접 ID로 각 입력 필드 숨기기
+            const fieldsToHide = [
+                'priceDropThreshold',
+                'volumeIncreaseThreshold',
+                'smaShortPeriod',
+                'smaLongPeriod'
+            ];
+            
+            fieldsToHide.forEach(id => {
+                const field = document.getElementById(id);
+                if (field) {
+                    // 입력 필드의 부모 요소(라벨 포함) 찾기
+                    const parentElement = field.closest('.form-group') || field.parentElement;
+                    if (parentElement) {
+                        parentElement.style.display = 'none';
+                    } else {
+                        field.style.display = 'none';
+                    }
+                }
+            });
+            
+            // 라벨 텍스트로 찾기
+            const labels = document.querySelectorAll('label');
+            labels.forEach(label => {
+                const text = label.textContent.toLowerCase();
+                if (text.includes('가격 하락') || 
+                    text.includes('거래량 증가') || 
+                    text.includes('sma 기간') || 
+                    text.includes('단기') || 
+                    text.includes('장기')) {
+                    
+                    const parentElement = label.closest('.form-group') || label.parentElement;
+                    if (parentElement) {
+                        parentElement.style.display = 'none';
+                    } else {
+                        label.style.display = 'none';
+                    }
+                }
+            });
+        });
+
+        // 분석 시작 버튼 이벤트 수정
         document.getElementById('startAnalysis').addEventListener('click', function() {
             const exchange = document.getElementById('exchange').value;
             const symbol = document.getElementById('symbol').value;
             const quoteCurrency = document.getElementById('quoteCurrency').value;
+            const tradingStyle = document.getElementById('tradingStyle').value;
             
             if (!exchange || !symbol || !quoteCurrency) {
                 alert('거래소, 코인, 화폐를 모두 선택해주세요');
@@ -717,21 +1376,119 @@
             
             // 화면 표시용 통화쌍 형식
             const displayPair = `${symbol}/${quoteCurrency}`;
-            // 백엔드 전송용 통화쌍 형식 (CurrencyPair.toString() 형식과 일치)
+            // 백엔드 전송용 통화쌍 형식
             const currencyPair = `${quoteCurrency}-${symbol}`;
             
             // 이미 존재하는 카드인지 확인
             const cardId = `${exchange}-${currencyPair}`.toLowerCase();
+            const existingCard = document.getElementById(cardId);
+            
+            if (existingCard) {
+                // 기존 카드가 있는 경우, 사용자에게 확인 후 대체
+                if (confirm('이 페어에 대한 분석이 이미 실행 중입니다. 트레이딩 스타일을 변경하여 다시 시작하시겠습니까?')) {
+                    // 기존 분석 중지 및 카드 삭제
+                    if (existingCard.websocket) {
+                        const stopRequest = {
+                            command: 'stop',
+                            data: {
+                                exchange: exchange,
+                                currencyPair: currencyPair,
+                                symbol: symbol,
+                                quoteCurrency: quoteCurrency
+                            }
+                        };
+                        
+                        try {
+                            existingCard.websocket.send(JSON.stringify(stopRequest));
+                            existingCard.websocket.close();
+                        } catch (e) {
+                            console.warn('Error stopping existing analysis:', e);
+                        }
+                    }
+                    
+                    // 기존 카드 제거
+                    existingCard.remove();
+                    
+                    // 새 카드 생성 및 분석 시작
+                    const newCard = createAnalysisCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
+                    startAnalysis(exchange, currencyPair, symbol, quoteCurrency, newCard);
+                }
+            } else {
+                // 새 카드 생성 및 분석 시작
+                const card = createAnalysisCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
+                startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card);
+            }
+        });
+
+        // 카드 추가 함수 수정
+        function addAnalysisCard(exchange, currencyPair, symbol, quoteCurrency) {
+            // 기존 카드가 있는지 확인
+            const cardId = `${exchange.toLowerCase()}-${currencyPair.toLowerCase().replace('/', '-')}`;
             if (document.getElementById(cardId)) {
-                alert('이 페어에 대한 분석이 이미 실행 중입니다');
-                return;
+                return document.getElementById(cardId);
             }
             
-            // 카드 생성
-            const card = createAnalysisCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
+            // 템플릿 복제
+            const template = document.getElementById('analysis-card-template');
+            const cardHtml = template.innerHTML
+                .replace(/{{exchange}}/g, exchange)
+                .replace(/{{currencyPair}}/g, currencyPair)
+                .replace(/{{symbol}}/g, symbol)
+                .replace(/{{quoteCurrency}}/g, quoteCurrency)
+                .replace(/{{cardId}}/g, cardId);
             
-            // 분석 시작
-            startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card);
+            // 카드 추가
+            const container = document.getElementById('analysis-results');
+            const cardWrapper = document.createElement('div');
+            cardWrapper.innerHTML = cardHtml;
+            const card = cardWrapper.firstElementChild;
+            container.appendChild(card);
+            
+            // 버튼 이벤트 설정
+            setupCardButtons(card, exchange, currencyPair, symbol, quoteCurrency);
+            
+            return card;
+        }
+
+        // 트레이딩 스타일 변경 시 파라미터 자동 설정
+        document.getElementById('tradingStyle').addEventListener('change', function() {
+            const tradingStyle = this.value;
+            console.log('Trading style changed to:', tradingStyle);
+            
+            // 트레이딩 스타일에 따른 기본값 설정
+            switch(tradingStyle) {
+                case 'SCALPING': // 초단타
+                    document.getElementById('priceDropThreshold').value = '1.5';
+                    document.getElementById('volumeIncreaseThreshold').value = '5';
+                    document.getElementById('smaShortPeriod').value = '1';
+                    document.getElementById('smaLongPeriod').value = '5';
+                    break;
+                case 'DAY_TRADING': // 단타
+                    document.getElementById('priceDropThreshold').value = '3';
+                    document.getElementById('volumeIncreaseThreshold').value = '10';
+                    document.getElementById('smaShortPeriod').value = '5';
+                    document.getElementById('smaLongPeriod').value = '15';
+                    break;
+                case 'SWING': // 스윙
+                    document.getElementById('priceDropThreshold').value = '5';
+                    document.getElementById('volumeIncreaseThreshold').value = '20';
+                    document.getElementById('smaShortPeriod').value = '15';
+                    document.getElementById('smaLongPeriod').value = '30';
+                    break;
+                default:
+                    // 기본값 유지
+                    break;
+            }
+        });
+
+        // 페이지 로드 시 현재 선택된 트레이딩 스타일에 따라 초기값 설정
+        document.addEventListener('DOMContentLoaded', function() {
+            // 트레이딩 스타일 변경 이벤트 트리거
+            const tradingStyleSelect = document.getElementById('tradingStyle');
+            if (tradingStyleSelect) {
+                const event = new Event('change');
+                tradingStyleSelect.dispatchEvent(event);
+            }
         });
     </script>
 </body>

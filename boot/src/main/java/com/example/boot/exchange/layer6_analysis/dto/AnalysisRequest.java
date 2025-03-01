@@ -14,10 +14,17 @@ public class AnalysisRequest {
     private String currencyPair;       // 거래쌍 (호환성 유지)
     private String symbol;             // 코인 심볼
     private String quoteCurrency;      // 화폐
-    private double priceDropThreshold; // 가격 하락 임계값
-    private double volumeIncreaseThreshold; // 거래량 증가 임계값
-    private int smaShortPeriod;       // 단기 SMA 기간 (분)
-    private int smaLongPeriod;        // 장기 SMA 기간 (분)
+    private String tradingStyle = "dayTrading"; // 기본값: 단타 트레이딩
+    private double priceDropThreshold = 3.0;
+    private double volumeIncreaseThreshold = 10.0;
+    private int smaShortPeriod = 5;
+    private int smaMediumPeriod = 15;
+    private int smaLongPeriod = 30;
+    private int rsiPeriod = 14;
+    private int rsiOverbought = 70;
+    private int rsiOversold = 30;
+    private int bollingerPeriod = 20;
+    private double bollingerDeviation = 2.0;
     
     // CurrencyPair 객체 생성 메서드
     public CurrencyPair toCurrencyPair() {

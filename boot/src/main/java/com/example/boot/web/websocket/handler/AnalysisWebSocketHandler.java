@@ -119,6 +119,13 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
                         .sma1Difference(result.getSma1Difference())
                         .sma3Difference(result.getSma3Difference())
                         .smaBreakout(result.isSmaBreakout())
+                        .rsiValue(result.getRsiValue())
+                        .rsiSignal(result.getRsiSignal())
+                        .bollingerUpper(result.getBollingerUpper())
+                        .bollingerMiddle(result.getBollingerMiddle())
+                        .bollingerLower(result.getBollingerLower())
+                        .bollingerSignal(result.getBollingerSignal())
+                        .bollingerWidth(result.getBollingerWidth())
                         .build();
                 }
                 

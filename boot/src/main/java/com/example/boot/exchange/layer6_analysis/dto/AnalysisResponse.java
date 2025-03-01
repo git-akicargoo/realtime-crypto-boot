@@ -23,7 +23,51 @@ public class AnalysisResponse {
     private double reboundProbability;
     private String analysisResult;  // "STRONG_REBOUND", "POSSIBLE_REBOUND", "NO_REBOUND"
     private String message;
-    private double sma1Difference;  // 1분 SMA와의 차이(%)
-    private double sma3Difference;  // 3분 SMA와의 차이(%)
-    private boolean smaBreakout;    // SMA 돌파 여부
+    
+    // 트레이딩 스타일
+    private String tradingStyle;
+    
+    // 종합 매수 적합도 점수 (0-100%)
+    private double buySignalStrength;
+    
+    // SMA 관련 필드
+    private double sma1Difference;
+    private double smaMediumDifference;
+    private double sma3Difference;
+    private boolean smaBreakout;
+    private String smaSignal; // "BULLISH", "BEARISH", "NEUTRAL"
+    
+    // RSI 관련 필드
+    private double rsiValue;
+    private String rsiSignal; // "OVERBOUGHT", "OVERSOLD", "NEUTRAL"
+    
+    // 볼린저 밴드 관련 필드
+    private double bollingerUpper;
+    private double bollingerMiddle;
+    private double bollingerLower;
+    private String bollingerSignal; // "UPPER_TOUCH", "LOWER_TOUCH", "MIDDLE_CROSS", "INSIDE"
+    private double bollingerWidth; // 밴드 폭 (변동성 지표)
+    
+    // 거래량 관련 필드
+    private double volumeSignalStrength; // 거래량 신호 강도 (0-100%)
+    
+    // 과매수/과매도 상태
+    private String marketCondition; // "OVERBOUGHT", "OVERSOLD", "NEUTRAL"
+    private double marketConditionStrength; // 과매수/과매도 강도 (0-100%)
+
+    public Double getSmaShortDifference() {
+        return this.sma1Difference;
+    }
+
+    public Double getSmaLongDifference() {
+        return this.sma3Difference;
+    }
+
+    public Double getSma1Difference() {
+        return this.sma1Difference;
+    }
+
+    public Double getSma3Difference() {
+        return this.sma3Difference;
+    }
 } 
