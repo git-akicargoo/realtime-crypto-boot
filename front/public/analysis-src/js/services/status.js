@@ -4,7 +4,6 @@ const StatusService = (function() {
     async function checkSystemStatus() {
         try {
             console.log('시스템 상태 확인 시작...');
-            // 경로 수정: /api/v1/status -> /api/v1/trading/mode/status
             const response = await fetch('/api/v1/trading/mode/status');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -13,17 +12,15 @@ const StatusService = (function() {
             
             console.log('시스템 상태 응답:', data);
             
-            // 디버깅 코드 제거하고 실제 응답 사용
             return {
                 redisOk: data.redisOk,
                 kafkaOk: data.kafkaOk,
                 leaderOk: data.leaderOk,
-                valid: data.valid
+                valid: data.redisOk && data.kafkaOk
             };
         } catch (error) {
             console.warn('시스템 상태 확인 중 오류:', error);
             
-            // 개발/테스트 환경에서도 오류 발생
             return {
                 redisOk: false,
                 kafkaOk: false,
@@ -94,7 +91,6 @@ const StatusService = (function() {
                 let newErrorMessage = '현재 시스템을 사용할 수 없습니다. 시스템 조건이 만족되지 않습니다:';
                 if (!status.redisOk) newErrorMessage += ' Redis 연결 실패,';
                 if (!status.kafkaOk) newErrorMessage += ' Kafka 연결 실패,';
-                if (!status.leaderOk) newErrorMessage += ' 리더 노드가 아님,';
                 
                 showSystemBlockOverlay(newErrorMessage.slice(0, -1));
                 
@@ -151,7 +147,6 @@ const StatusService = (function() {
             let errorMessage = '현재 시스템을 사용할 수 없습니다. 시스템 조건이 만족되지 않습니다:';
             if (!status.redisOk) errorMessage += ' Redis 연결 실패,';
             if (!status.kafkaOk) errorMessage += ' Kafka 연결 실패,';
-            if (!status.leaderOk) errorMessage += ' 리더 노드가 아님,';
             
             console.log('표시할 오류 메시지:', errorMessage);
             showSystemBlockOverlay(errorMessage.slice(0, -1));
@@ -171,7 +166,6 @@ const StatusService = (function() {
             let errorMessage = '시스템 상태에 문제가 있습니다:';
             if (!status.redisOk) errorMessage += ' Redis 연결 실패,';
             if (!status.kafkaOk) errorMessage += ' Kafka 연결 실패,';
-            if (!status.leaderOk) errorMessage += ' 리더 노드가 아님,';
             
             // 알림 표시
             showStatusAlert(errorMessage.slice(0, -1));
@@ -229,80 +223,54 @@ const StatusService = (function() {
     }
     
     // 기존 시스템 블록 오버레이 업데이트
-    function updateSystemBlockOverlay(errorMessage) {
-        console.log('updateSystemBlockOverlay 실행:', errorMessage);
+    function updateSystemBlockOverlay(systemStatus) {
+        const overlay = document.getElementById('system-block-overlay');
+        if (!overlay) return;
         
-        const overlay = document.getElementById('systemBlockOverlay');
-        if (!overlay) {
-            console.warn('업데이트할 오버레이가 없어 새로 생성합니다');
-            showSystemBlockOverlay(errorMessage);
-            return;
-        }
+        // Redis와 Kafka 상태만으로 시스템 사용 가능 여부 결정
+        const isSystemValid = systemStatus.redisOk && systemStatus.kafkaOk;
         
-        // 복구 상황 파악
-        const redisFixed = errorMessage.indexOf('Redis 연결 실패') === -1;
-        const kafkaFixed = errorMessage.indexOf('Kafka 연결 실패') === -1;
-        const leaderFixed = errorMessage.indexOf('리더 노드가 아님') === -1;
-        
-        // 서비스 상태 목록 업데이트
-        const serviceStatusHtml = `
-            <ul style="list-style: none; padding: 0; margin: 20px 0; text-align: left; display: inline-block;">
-                <li style="margin: 10px 0; display: flex; align-items: center;">
-                    <span style="margin-right: 10px; color: ${redisFixed ? '#2ecc71' : '#e74c3c'};">
-                        ${redisFixed ? '✅' : '❌'}
-                    </span>
-                    <span>Redis 연결: ${redisFixed ? '정상' : '실패'}</span>
-                </li>
-                <li style="margin: 10px 0; display: flex; align-items: center;">
-                    <span style="margin-right: 10px; color: ${kafkaFixed ? '#2ecc71' : '#e74c3c'};">
-                        ${kafkaFixed ? '✅' : '❌'}
-                    </span>
-                    <span>Kafka 연결: ${kafkaFixed ? '정상' : '실패'}</span>
-                </li>
-                <li style="margin: 10px 0; display: flex; align-items: center;">
-                    <span style="margin-right: 10px; color: ${leaderFixed ? '#2ecc71' : '#e74c3c'};">
-                        ${leaderFixed ? '✅' : '❌'}
-                    </span>
-                    <span>리더 노드: ${leaderFixed ? '정상' : '비활성'}</span>
-                </li>
-            </ul>
-        `;
-        
-        // 내용 업데이트
-        overlay.innerHTML = `
-            <div class="system-error-icon" style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
-            <h2 style="margin-bottom: 20px;">시스템 연결 오류</h2>
-            <p style="margin-bottom: 10px; max-width: 600px;">${errorMessage}</p>
-            ${serviceStatusHtml}
-            <p style="margin-bottom: 20px;">현재 페이지를 이용하려면 모든 서비스가 정상 작동해야 합니다.</p>
-            <button id="retrySystemCheck" class="retry-button" style="padding: 10px 20px; background: #f1c40f; color: #333; border: none; border-radius: 4px; cursor: pointer;">
-                상태 다시 확인
-            </button>
-        `;
-        
-        // 재시도 버튼 이벤트 다시 연결
-        document.getElementById('retrySystemCheck').addEventListener('click', async function() {
-            console.log('재시도 버튼 클릭됨');
+        if (!isSystemValid) {
+            // 시스템을 사용할 수 없는 경우
+            let errorMessages = [];
             
-            // 버튼 스타일 변경 (클릭 확인용)
-            this.textContent = '확인 중...';
-            this.style.backgroundColor = '#ccc';
-            this.disabled = true;
-            
-            const status = await checkSystemStatus();
-            if (status.valid) {
-                removeSystemBlockOverlay();
-                state.systemReady = true;
-            } else {
-                // 상태가 여전히 좋지 않으면 메시지 갱신
-                let newErrorMessage = '현재 시스템을 사용할 수 없습니다. 시스템 조건이 만족되지 않습니다:';
-                if (!status.redisOk) newErrorMessage += ' Redis 연결 실패,';
-                if (!status.kafkaOk) newErrorMessage += ' Kafka 연결 실패,';
-                if (!status.leaderOk) newErrorMessage += ' 리더 노드가 아님,';
-                
-                updateSystemBlockOverlay(newErrorMessage.slice(0, -1));
+            if (!systemStatus.redisOk) {
+                errorMessages.push('Redis 연결 실패');
             }
-        });
+            
+            if (!systemStatus.kafkaOk) {
+                errorMessages.push('Kafka 연결 실패');
+            }
+            
+            const errorMessageText = errorMessages.length > 0 
+                ? ': ' + errorMessages.join(', ')
+                : '';
+                
+            overlay.innerHTML = `
+                <div class="system-block-content">
+                    <h2>시스템 연결 오류</h2>
+                    <p>현재 시스템을 사용할 수 없습니다. 시스템 조건이 만족되지 않습니다${errorMessageText}</p>
+                    
+                    <div class="system-status">
+                        <p class="${systemStatus.redisOk ? 'status-ok' : 'status-error'}">
+                            ${systemStatus.redisOk ? '✅' : '❌'}<br>
+                            Redis 연결: ${systemStatus.redisOk ? '정상' : '실패'}
+                        </p>
+                        <p class="${systemStatus.kafkaOk ? 'status-ok' : 'status-error'}">
+                            ${systemStatus.kafkaOk ? '✅' : '❌'}<br>
+                            Kafka 연결: ${systemStatus.kafkaOk ? '정상' : '실패'}
+                        </p>
+                    </div>
+                    
+                    <p>현재 페이지를 이용하려면 모든 서비스가 정상 작동해야 합니다.</p>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+            console.log('updateSystemBlockOverlay 실행:', overlay.textContent.trim());
+        } else {
+            // 시스템을 사용할 수 있는 경우 오버레이 숨기기
+            overlay.style.display = 'none';
+        }
     }
     
     // 공개 API
