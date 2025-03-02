@@ -1,5 +1,8 @@
 // 카드 컴포넌트 관리 모듈
 const CardComponent = (function() {
+    // 변화율 정보를 저장할 객체 (파일 상단에 추가)
+    const priceChangeCache = {};
+
     // 카드 생성 함수
     function createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair) {
         console.log('카드 생성:', exchange, currencyPair, symbol, quoteCurrency, displayPair);
@@ -160,18 +163,45 @@ const CardComponent = (function() {
                 priceElement.textContent = FormatUtils.formatPrice(data.currentPrice);
             }
             
-            // 가격 변화 업데이트
+            // 가격 변화율 업데이트
             const priceChangeElement = card.querySelector('.price-change');
             if (priceChangeElement && data.priceChangePercent !== undefined) {
-                const changePercent = data.priceChangePercent;
-                const formattedChange = FormatUtils.formatPercent(changePercent);
+                const cardId = card.id;
+                console.log(`[${cardId}] 변화율:`, data.priceChangePercent);
+                
+                // 변화율이 의미있는 값인지 확인 (0.01% 이상 변화가 있어야 의미있는 값으로 간주)
+                const isSignificantChange = Math.abs(data.priceChangePercent) >= 0.01;
+                
+                // 의미있는 변화가 있으면 캐시에 저장
+                if (isSignificantChange) {
+                    console.log(`[${cardId}] 의미있는 변화 감지, 캐시에 저장:`, data.priceChangePercent);
+                    priceChangeCache[cardId] = data.priceChangePercent;
+                }
+                
+                // 표시할 변화율 (의미있는 변화가 없고 캐시가 있으면 캐시 사용)
+                const displayChange = !isSignificantChange && priceChangeCache[cardId] 
+                    ? priceChangeCache[cardId] 
+                    : data.priceChangePercent;
+                
+                console.log(`[${cardId}] 표시할 변화율:`, displayChange);
+                
+                // 직접 포맷팅하여 소수점 2자리까지 표시
+                let formattedChange;
+                if (Math.abs(displayChange) < 0.01) {
+                    // 매우 작은 값이지만 0이 아닌 경우, 방향 표시
+                    formattedChange = displayChange > 0 ? "+0.01%" : "-0.01%";
+                } else {
+                    // 일반적인 값은 소수점 2자리까지 표시
+                    formattedChange = (displayChange > 0 ? "+" : "") + displayChange.toFixed(2) + "%";
+                }
+                
                 priceChangeElement.textContent = formattedChange;
                 
                 // 클래스 업데이트
                 priceChangeElement.className = 'price-change';
-                if (changePercent > 0) {
+                if (displayChange > 0) {
                     priceChangeElement.classList.add('positive');
-                } else if (changePercent < 0) {
+                } else if (displayChange < 0) {
                     priceChangeElement.classList.add('negative');
                 } else {
                     priceChangeElement.classList.add('neutral');
