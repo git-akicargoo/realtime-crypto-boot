@@ -6,32 +6,226 @@ const state = {
     symbols: {},
     activeCards: {},
     tradingStyle: 'dayTrading', // 기본값 수정
-    systemReady: false
+    systemReady: false,
+    alertShowing: false // 경고창이 표시 중인지 추적
 };
+
+// 페이지 로드 후 즉시 시스템 상태 확인
+function checkSystemStatus() {
+    if (window.StatusService) {
+        console.log('StatusService 존재, 상태 확인 시작');
+        return StatusService.validateAndBlockIfNeeded()
+            .then(isReady => {
+                state.systemReady = isReady;
+                console.log('시스템 상태 확인 결과:', isReady);
+                return isReady;
+            });
+    } else {
+        console.warn('StatusService가 존재하지 않습니다. 스크립트 로드 순서를 확인하세요.');
+        return Promise.resolve(true); // 기본적으로 시스템 사용 가능으로 처리
+    }
+}
+
+// 주기적 상태 확인 시작 (3초마다)
+function startPeriodicStatusCheck() {
+    console.log('주기적 상태 확인 설정 (3초 간격)');
+    return setInterval(async () => {
+        if (!window.StatusService) {
+            console.warn('StatusService 사용 불가 - 주기적 확인 건너뜀');
+            return;
+        }
+        
+        console.log('주기적 상태 확인 실행');
+        const status = await StatusService.checkSystemStatus();
+        
+        // 시스템 상태가 완전히 정상이면
+        if (status.valid && !state.systemReady) {
+            StatusService.removeSystemBlockOverlay();
+            state.systemReady = true;
+            console.log('시스템 상태가 복구되었습니다. 차단이 해제되었습니다.');
+        } 
+        // 시스템 상태가 이전에 정상이었는데 오류 발생
+        else if (!status.valid && state.systemReady) {
+            let errorMessage = '현재 시스템을 사용할 수 없습니다. 시스템 조건이 만족되지 않습니다:';
+            if (!status.redisOk) errorMessage += ' Redis 연결 실패,';
+            if (!status.kafkaOk) errorMessage += ' Kafka 연결 실패,';
+            if (!status.leaderOk) errorMessage += ' 리더 노드가 아님,';
+            
+            StatusService.showSystemBlockOverlay(errorMessage.slice(0, -1));
+            state.systemReady = false;
+        }
+        // 시스템 상태가 계속 오류지만 세부 상태가 변경된 경우 (예: Redis만 복구됨)
+        else if (!status.valid && !state.systemReady) {
+            // 현재 표시 중인 오버레이가 있는지 확인
+            const currentOverlay = document.getElementById('systemBlockOverlay');
+            if (currentOverlay) {
+                // 새 오류 메시지 생성
+                let errorMessage = '현재 시스템을 사용할 수 없습니다. 시스템 조건이 만족되지 않습니다:';
+                if (!status.redisOk) errorMessage += ' Redis 연결 실패,';
+                if (!status.kafkaOk) errorMessage += ' Kafka 연결 실패,';
+                if (!status.leaderOk) errorMessage += ' 리더 노드가 아님,';
+                
+                // 오버레이 콘텐츠 업데이트
+                StatusService.updateSystemBlockOverlay(errorMessage.slice(0, -1));
+            }
+        }
+    }, 3000); // 3초
+}
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('분석 페이지(analysis.html) 초기화');
     
-    // 시스템 상태 확인
+    // 즉시 "확인 중" 오버레이 표시 (z-index 활용)
     if (window.StatusService) {
-        state.systemReady = await StatusService.validateSystemStatus();
-        if (!state.systemReady) {
-            console.warn('시스템 상태 이상: 일부 기능이 제한될 수 있습니다');
+        // 임시 "확인 중" 오버레이 표시
+        const tempOverlay = document.createElement('div');
+        tempOverlay.id = 'tempSystemOverlay';
+        Object.assign(tempOverlay.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: '10000',
+            color: '#fff',
+            textAlign: 'center'
+        });
+        
+        // 세련된 로딩 애니메이션 HTML
+        tempOverlay.innerHTML = `
+            <div class="loading-container">
+                <div class="loading-ring"></div>
+                <div class="loading-dot"></div>
+                <div class="loading-pulse-ring"></div>
+            </div>
+            <h2 style="margin-top: 30px; margin-bottom: 10px; font-size: 24px; font-weight: 500;">시스템 연결 확인 중</h2>
+            <p style="margin: 0; opacity: 0.8; max-width: 400px; line-height: 1.5;">필요한 서비스와의 연결 상태를 확인하고 있습니다. 잠시만 기다려주세요.</p>
+        `;
+        
+        // 세련된 로딩 애니메이션 CSS
+        const style = document.createElement('style');
+        style.textContent = `
+            .loading-container {
+                position: relative;
+                width: 120px;
+                height: 120px;
+            }
+            
+            .loading-ring {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: 4px solid rgba(255, 255, 255, 0.1);
+                border-top: 4px solid #fff;
+                border-radius: 50%;
+                animation: spin 1.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+            }
+            
+            .loading-dot {
+                position: absolute;
+                top: 10px;
+                left: 50%;
+                width: 12px;
+                height: 12px;
+                background-color: #4d90fe;
+                border-radius: 50%;
+                transform: translateX(-50%);
+                box-shadow: 0 0 10px 2px rgba(77, 144, 254, 0.5);
+            }
+            
+            .loading-pulse-ring {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 90px;
+                height: 90px;
+                border: 2px solid rgba(77, 144, 254, 0.3);
+                border-radius: 50%;
+                animation: pulse 2s ease-out infinite;
+            }
+            
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+            
+            @keyframes pulse {
+                0% {
+                    transform: translate(-50%, -50%) scale(0.8);
+                    opacity: 1;
+                }
+                100% {
+                    transform: translate(-50%, -50%) scale(1.2);
+                    opacity: 0;
+                }
+            }
+        `;
+        
+        document.head.appendChild(style);
+        document.body.appendChild(tempOverlay);
+        document.body.style.overflow = 'hidden'; // 스크롤 방지
+        
+        // 시스템 상태 확인 (명시적인 타임아웃 없음 - 응답이 올 때까지 대기)
+        try {
+            console.log('시스템 상태 확인 시작...');
+            const status = await StatusService.checkSystemStatus();
+            console.log('시스템 상태 확인 완료:', status);
+            
+            // 임시 오버레이 제거
+            tempOverlay.remove();
+            document.body.style.overflow = ''; // 스크롤 복원
+            
+            // 상태에 따른 UI 표시
+            if (!status.valid) {
+                // 상태가 유효하지 않은 경우
+                let errorMessage = '현재 시스템을 사용할 수 없습니다. 시스템 조건이 만족되지 않습니다:';
+                if (!status.redisOk) errorMessage += ' Redis 연결 실패,';
+                if (!status.kafkaOk) errorMessage += ' Kafka 연결 실패,';
+                if (!status.leaderOk) errorMessage += ' 리더 노드가 아님,';
+                
+                StatusService.showSystemBlockOverlay(errorMessage.slice(0, -1));
+                state.systemReady = false;
+            } else {
+                // 정상인 경우
+                state.systemReady = true;
+                console.log('시스템 상태 정상, UI 초기화 진행...');
+                
+                // 거래소 목록 로드
+                try {
+                    const exchanges = await ApiService.loadExchanges();
+                    state.exchanges = exchanges;
+                    populateExchangeSelect(exchanges);
+                } catch (error) {
+                    console.error('거래소 목록 로드 실패:', error);
+                    StatusService.showStatusAlert('거래소 정보를 불러오는 데 실패했습니다.');
+                }
+            }
+        } catch (error) {
+            // 오류 발생시
+            console.error('상태 확인 중 오류 발생:', error);
+            tempOverlay.remove();
+            document.body.style.overflow = ''; // 스크롤 복원
+            
+            StatusService.showSystemBlockOverlay('시스템 상태 확인 중 오류가 발생했습니다. 네트워크 연결을 확인하세요.');
+            state.systemReady = false;
         }
+        
+        // 주기적 상태 확인 시작
+        startPeriodicStatusCheck();
+    } else {
+        console.warn('StatusService가 존재하지 않습니다');
     }
     
-    // 거래소 목록 로드
-    try {
-        const exchanges = await ApiService.loadExchanges();
-        state.exchanges = exchanges;
-        populateExchangeSelect(exchanges);
-    } catch (error) {
-        console.error('거래소 목록 로드 실패:', error);
-        StatusService.showStatusAlert('거래소 정보를 불러오는 데 실패했습니다.');
-    }
-    
-    // 이벤트 리스너 설정
+    // 이벤트 리스너 설정 (차단 여부와 관계없이 항상 설정)
     setupEventListeners();
     
     // 테마 설정
@@ -68,11 +262,32 @@ function setupEventListeners() {
     // 분석 시작 버튼 이벤트
     const startAnalysisBtn = document.getElementById('startAnalysis');
     if (startAnalysisBtn) {
-        startAnalysisBtn.addEventListener('click', function() {
-            if (!state.systemReady) {
-                const confirmStart = confirm('시스템 상태에 문제가 있습니다. 그래도 분석을 시작하시겠습니까?');
-                if (!confirmStart) return;
+        startAnalysisBtn.addEventListener('click', async function() {
+            // 이미 경고창이 표시 중이면 중복 표시하지 않음
+            if (state.alertShowing) {
+                return;
             }
+            
+            // 버튼 클릭 시 현재 시스템 상태 다시 확인
+            const status = await StatusService.checkSystemStatus();
+            
+            if (!status.valid) {
+                // 경고창 표시 중 플래그 설정
+                state.alertShowing = true;
+                
+                // 시스템 상태가 유효하지 않으면
+                let errorMessage = '현재 시스템을 사용할 수 없습니다. 시스템 조건이 만족되지 않습니다:';
+                if (!status.redisOk) errorMessage += ' Redis 연결 실패,';
+                if (!status.kafkaOk) errorMessage += ' Kafka 연결 실패,';
+                if (!status.leaderOk) errorMessage += ' 리더 노드가 아님,';
+                
+                // 커스텀 경고창 생성
+                showCustomAlert(errorMessage.slice(0, -1));
+                
+                return; // 함수 종료, 분석 시작하지 않음
+            }
+            
+            // 시스템 상태가 정상이면 분석 시작
             startNewAnalysis();
         });
     }
@@ -276,4 +491,56 @@ function initializeTheme() {
             localStorage.setItem('theme', theme);
         });
     }
+}
+
+// 커스텀 경고창 표시
+function showCustomAlert(message) {
+    // 이미 표시 중인 경고창이 있으면 제거
+    const existingAlert = document.getElementById('customAlert');
+    if (existingAlert) {
+        existingAlert.remove();
+    }
+    
+    // 새 경고창 생성
+    const alertBox = document.createElement('div');
+    alertBox.id = 'customAlert';
+    alertBox.style.position = 'fixed';
+    alertBox.style.top = '50%';
+    alertBox.style.left = '50%';
+    alertBox.style.transform = 'translate(-50%, -50%)';
+    alertBox.style.backgroundColor = 'var(--bg-card)';
+    alertBox.style.border = '1px solid var(--border-color)';
+    alertBox.style.borderRadius = '8px';
+    alertBox.style.padding = '20px';
+    alertBox.style.boxShadow = 'var(--shadow)';
+    alertBox.style.zIndex = '10000';
+    alertBox.style.maxWidth = '80%';
+    alertBox.style.textAlign = 'center';
+    
+    alertBox.innerHTML = `
+        <p style="margin-bottom: 20px; color: var(--text-primary)">${message}</p>
+        <button id="closeAlert" style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">확인</button>
+    `;
+    
+    document.body.appendChild(alertBox);
+    
+    // 배경 오버레이 추가
+    const overlay = document.createElement('div');
+    overlay.id = 'alertOverlay';
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    overlay.style.zIndex = '9999';
+    
+    document.body.appendChild(overlay);
+    
+    // 확인 버튼 이벤트
+    document.getElementById('closeAlert').addEventListener('click', function() {
+        alertBox.remove();
+        overlay.remove();
+        state.alertShowing = false;
+    });
 } 
