@@ -32,12 +32,13 @@ export default function App() {
         } />
         <Route path="/analysis" element={
           <iframe 
-            src="/analysis.html" 
+            src="/analysis-src/analysis.html"
             style={{
               width: '100%',
               height: 'calc(100vh - 84px)',
               border: 'none',
-              marginTop: '84px'
+              marginTop: '84px',
+              backgroundColor: 'var(--bg-primary)'
             }}
           />
         } />

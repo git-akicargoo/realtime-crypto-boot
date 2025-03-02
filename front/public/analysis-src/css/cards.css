@@ -1,0 +1,238 @@
+/* 카드 컨테이너 */
+.analysis-cards-container {
+  display: block;
+  width: 100%;
+}
+
+/* 분석 카드 */
+.analysis-card {
+  width: 100%;
+  background-color: var(--bg-card);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+  border: 1px solid var(--border-color);
+}
+
+.analysis-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* 카드 헤더 */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.exchange-pair {
+  font-weight: bold;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.card-actions button {
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: none;
+}
+
+.start-button {
+  background-color: #f1c40f;
+  color: #333;
+}
+
+.stop-button {
+  background-color: var(--warning-color);
+  color: #333;
+}
+
+.retry-button {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.delete-button {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+/* 로딩 인디케이터 */
+.loading-indicator {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+  gap: 10px;
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+[data-theme="dark"] .loading-indicator {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* 카드 콘텐츠 */
+.card-content {
+  padding: 15px;
+  width: 100%;
+  background-color: var(--bg-primary);
+}
+
+/* 카드 내 정보 행을 가로로 표시 */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+/* 각 정보 블록의 너비 조정 */
+.info-block, .signal-block, .market-block {
+  flex: 1;
+  min-width: 150px;
+}
+
+/* 가격 블록 스타일 강화 */
+.price-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.current-price {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+/* 분석 정보 열 */
+.info-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.result-row, .signal-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.result-label, .signal-label {
+  color: var(--text-secondary);
+}
+
+.result-value {
+  font-weight: bold;
+}
+
+.signal-strength-container {
+  width: 100%;
+  height: 8px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 3px;
+}
+
+.signal-strength-bar {
+  height: 100%;
+  width: 0;
+  background-color: var(--success-color);
+  transition: width 0.5s;
+}
+
+/* 지표 블록 */
+.indicators-block {
+  flex: 2;
+  background-color: var(--bg-card);
+  padding: 10px;
+  border-radius: 5px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 15px;
+}
+
+.indicator-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.indicator-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* 시장 상태 블록 */
+.market-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.market-label {
+  color: var(--text-secondary);
+}
+
+.market-condition {
+  font-weight: 500;
+}
+
+/* 트레이딩 스타일 정보 */
+.trading-style-info {
+  background-color: var(--bg-card);
+  padding: 10px;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.analysis-message {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* 상태 색상 */
+.positive {
+  color: var(--success-color);
+}
+
+.negative {
+  color: var(--danger-color);
+}
+
+.neutral {
+  color: var(--neutral-color);
+}
+
+/* 반응형 조정 */
+@media (max-width: 768px) {
+  .info-row {
+    flex-direction: column;
+  }
+  
+  .price-block, .market-block, .signal-block {
+    width: 100%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .analysis-cards-container {
+    display: block;
+  }
+} 
