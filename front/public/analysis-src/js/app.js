@@ -387,32 +387,74 @@ function handleCardButtonClick(event) {
     if (!card) return;
     
     const cardId = card.id;
-    const cardInfo = state.activeCards[cardId];
+    let cardInfo = state.activeCards[cardId];
     
     if (!cardInfo) {
-        console.error('카드 정보를 찾을 수 없음:', cardId);
-        return;
+        console.warn('카드 정보를 찾을 수 없음, 정보 생성 시도:', cardId);
+        
+        // 카드 속성에서 정보 추출
+        const exchange = card.getAttribute('data-exchange');
+        const currencyPair = card.getAttribute('data-currency-pair');
+        const symbol = card.getAttribute('data-symbol');
+        const quoteCurrency = card.getAttribute('data-quote-currency');
+        const tradingStyle = 'dayTrading'; // 기본값
+        
+        if (exchange && currencyPair && symbol && quoteCurrency) {
+            // 카드 정보 생성
+            cardInfo = {
+                id: cardId,
+                element: card,
+                params: {
+                    exchange,
+                    currencyPair,
+                    symbol,
+                    quoteCurrency,
+                    tradingStyle
+                }
+            };
+            
+            // 상태에 추가
+            state.activeCards[cardId] = cardInfo;
+            console.log('카드 정보 생성 완료:', cardId, cardInfo);
+        } else {
+            console.error('카드 속성에서 필요한 정보를 추출할 수 없음:', cardId);
+            return;
+        }
     }
     
     const { exchange, currencyPair, symbol, quoteCurrency, tradingStyle } = cardInfo.params;
     
     // 버튼 액션 처리
     if (target.classList.contains('start-button')) {
+        // 시작 버튼 숨기고 중지 버튼 표시
+        target.style.display = 'none';
+        const stopButton = card.querySelector('.stop-button');
+        if (stopButton) stopButton.style.display = 'inline-block';
+        
+        // 분석 시작 요청
         WebSocketService.startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card, tradingStyle);
-    } else if (target.classList.contains('stop-button')) {
+    }
+    else if (target.classList.contains('stop-button')) {
+        // 중지 버튼 숨기고 시작 버튼 표시
+        target.style.display = 'none';
+        const startButton = card.querySelector('.start-button');
+        if (startButton) startButton.style.display = 'inline-block';
+        
+        // 분석 중지 요청
         WebSocketService.stopAnalysis(exchange, currencyPair, symbol, quoteCurrency, card);
-    } else if (target.classList.contains('retry-button')) {
+    }
+    else if (target.classList.contains('retry-button')) {
         // 재시도 버튼 숨기기
         target.style.display = 'none';
+        
         // 분석 다시 시작
         WebSocketService.startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card, tradingStyle);
-    } else if (target.classList.contains('delete-button')) {
-        // 연결 종료
+    }
+    else if (target.classList.contains('delete-button')) {
+        // 분석 중지 요청
         WebSocketService.stopAnalysis(exchange, currencyPair, symbol, quoteCurrency, card);
         // 카드 삭제
-        CardComponent.deleteCard(card);
-        // 활성 카드 목록에서 제거
-        delete state.activeCards[cardId];
+        deleteCard(cardId);
     }
 }
 
@@ -421,8 +463,8 @@ function startNewAnalysis() {
     const exchange = document.getElementById('exchange').value;
     const quoteCurrency = document.getElementById('quoteCurrency').value;
     const symbol = document.getElementById('symbol').value;
+    const tradingStyle = document.getElementById('tradingStyle').value || 'dayTrading';
     
-    // 입력 검증
     if (!exchange || !quoteCurrency || !symbol) {
         alert('거래소, 기준 화폐, 코인을 모두 선택해주세요.');
         return;
@@ -451,24 +493,27 @@ function startNewAnalysis() {
     if (container) {
         container.appendChild(card);
         
-        // 분석 시작
-        WebSocketService.startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card, state.tradingStyle);
+        // 카드 생성 후 자동으로 분석 시작 (카드 내부의 시작 버튼 클릭)
+        const startButton = card.querySelector('.start-button');
+        if (startButton) {
+            startButton.click();
+        }
         
-        // 활성 카드 목록에 추가
+        // 활성 카드 목록에 추가 (객체에 추가)
         state.activeCards[cardId] = {
+            id: cardId,
             element: card,
             params: { 
                 exchange, 
                 currencyPair, 
                 symbol, 
                 quoteCurrency, 
-                tradingStyle: state.tradingStyle 
+                tradingStyle 
             }
         };
+        
+        console.log('새 분석 카드 추가:', cardId, state.activeCards[cardId]);
     }
-    
-    // 선택 초기화
-    document.getElementById('symbol').selectedIndex = 0;
 }
 
 function initializeTheme() {
@@ -543,4 +588,25 @@ function showCustomAlert(message) {
         overlay.remove();
         state.alertShowing = false;
     });
+}
+
+// 카드 삭제 함수
+function deleteCard(cardId) {
+    // 카드 정보 확인
+    const cardInfo = state.activeCards[cardId];
+    if (!cardInfo) {
+        console.error('삭제할 카드 정보를 찾을 수 없음:', cardId);
+        return;
+    }
+    
+    // 카드 요소 제거
+    const card = cardInfo.element;
+    if (card && card.parentNode) {
+        card.parentNode.removeChild(card);
+    }
+    
+    // 상태에서 카드 제거
+    delete state.activeCards[cardId];
+    
+    console.log('카드 삭제 완료:', cardId);
 } 

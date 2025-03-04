@@ -95,4 +95,558 @@
 
 .indicator-value {
     font-weight: 500;
+}
+
+/* 모의 거래 섹션 스타일 개선 */
+.mock-trading-content {
+    margin-top: 15px;
+    padding: 15px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+}
+
+.dark-mode .mock-trading-content {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.mock-trading-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.mock-balance-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mock-balance-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+.dark-mode .mock-balance-row {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.balance-label {
+    font-weight: 500;
+    color: var(--secondary-text-color);
+}
+
+.mock-trading-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.threshold-setting {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 6px;
+}
+
+.dark-mode .threshold-setting {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.threshold-label {
+    font-weight: 500;
+    color: var(--secondary-text-color);
+}
+
+.threshold-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.threshold-btn {
+    flex: 1;
+    padding: 8px 0;
+    border: 1px solid var(--border-color);
+    background-color: var(--card-bg-color);
+    color: var(--text-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.threshold-btn:hover {
+    background-color: var(--hover-color);
+}
+
+.threshold-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.mock-trading-start-btn,
+.mock-trading-stop-btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    min-width: 120px;
+}
+
+.mock-trading-start-btn {
+    background-color: var(--buy-color);
+    color: white;
+    border: none;
+}
+
+.mock-trading-stop-btn {
+    background-color: var(--sell-color);
+    color: white;
+    border: none;
+}
+
+.mock-trading-history {
+    margin-top: 5px;
+}
+
+.mock-trading-history h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--secondary-text-color);
+}
+
+/* 거래 내역 테이블 스타일 */
+.trading-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 13px;
+}
+
+.trading-history-table th,
+.trading-history-table td {
+    padding: 8px 6px;
+    text-align: right;
+    border-bottom: 1px solid #eee;
+}
+
+.trading-history-table th {
+    background-color: #f5f5f5;
+    font-weight: 600;
+    text-align: center;
+    color: #333;
+}
+
+.trading-history-table td:first-child,
+.trading-history-table th:first-child {
+    text-align: center; /* 시간 열 */
+}
+
+.trading-history-table td:nth-child(2),
+.trading-history-table th:nth-child(2) {
+    text-align: center; /* 상태 열 */
+}
+
+/* 매수가, 매도가, 현재가 열 */
+.trading-history-table th:nth-child(3),
+.trading-history-table th:nth-child(4),
+.trading-history-table th:nth-child(5),
+.trading-history-table td:nth-child(3),
+.trading-history-table td:nth-child(4),
+.trading-history-table td:nth-child(5) {
+    text-align: right;
+    min-width: 80px;
+}
+
+/* 수량 열 */
+.trading-history-table th:nth-child(6),
+.trading-history-table td:nth-child(6) {
+    text-align: right;
+    min-width: 90px;
+}
+
+/* 매수금액, 매도금액 열 */
+.trading-history-table th:nth-child(7),
+.trading-history-table th:nth-child(8),
+.trading-history-table td:nth-child(7),
+.trading-history-table td:nth-child(8) {
+    text-align: right;
+    min-width: 100px;
+}
+
+/* 수익률 열 */
+.trading-history-table th:nth-child(9),
+.trading-history-table td:nth-child(9) {
+    text-align: right;
+    min-width: 70px;
+}
+
+/* 현재가치 열 */
+.trading-history-table th:nth-child(10),
+.trading-history-table td:nth-child(10) {
+    text-align: right;
+    min-width: 100px;
+}
+
+.trading-history-table .no-data {
+    text-align: center;
+    color: #757575;
+    padding: 15px;
+    font-style: italic;
+}
+
+/* 거래 상태 스타일 */
+.trade-status {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    text-align: center;
+    min-width: 60px;
+}
+
+.trade-status.active {
+    background-color: #4caf50;
+    color: white;
+}
+
+.trade-status.closed {
+    background-color: #607d8b;
+    color: white;
+}
+
+/* 거래 행 스타일 */
+.trading-history-table .active-trade {
+    background-color: rgba(76, 175, 80, 0.05);
+}
+
+.trading-history-table .closed-trade {
+    background-color: rgba(96, 125, 139, 0.05);
+}
+
+/* 수익률 스타일 */
+.profit {
+    color: #4caf50;
+    font-weight: bold;
+}
+
+.loss {
+    color: #f44336;
+    font-weight: bold;
+}
+
+/* 다크모드에서의 테이블 스타일 */
+.dark-mode .trading-history-table th {
+    background-color: #333;
+    color: #fff;
+}
+
+.dark-mode .trading-history-table td {
+    border-bottom: 1px solid #444;
+}
+
+.dark-mode .trading-history-table .active-trade {
+    background-color: rgba(76, 175, 80, 0.1);
+}
+
+.dark-mode .trading-history-table .closed-trade {
+    background-color: rgba(96, 125, 139, 0.1);
+}
+
+.dark-mode .trading-history-table .no-data {
+    color: #aaa;
+}
+
+/* 가격 변화 화살표 */
+.buy-icon, .sell-icon {
+    display: inline-block;
+    margin-right: 4px;
+}
+
+.buy-icon {
+    color: #4CAF50;
+}
+
+.sell-icon {
+    color: #F44336;
+}
+
+/* 거래 내역 없음 메시지 */
+.trading-history-table .no-data {
+    text-align: center;
+    color: #757575;
+    padding: 15px;
+}
+
+/* 통합된 거래 행 스타일 */
+.trading-history-table .price,
+.trading-history-table .current-price,
+.trading-history-table .amount,
+.trading-history-table .current-value {
+    font-family: 'Courier New', monospace;
+}
+
+/* 시간 범위 표시 스타일 */
+.trading-history-table td:first-child {
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+/* 가격 범위 표시 스타일 */
+.trading-history-table .price {
+    white-space: nowrap;
+}
+
+/* 거래 내역 테이블 스타일 개선 */
+.trading-history-table th:nth-child(6),
+.trading-history-table td:nth-child(6) {
+    text-align: right;
+    font-weight: 500;
+}
+
+.trading-history-table th:nth-child(7),
+.trading-history-table td:nth-child(7) {
+    text-align: right;
+    font-weight: 500;
+}
+
+.positive {
+    color: var(--buy-color);
+}
+
+.negative {
+    color: var(--sell-color);
+}
+
+.neutral {
+    color: var(--neutral-color);
+}
+
+/* 모의 거래 토글 버튼 스타일 */
+.mock-trading-toggle-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.mock-trading-toggle-btn:hover {
+    background-color: #45a049;
+}
+
+/* 다크 모드 */
+.dark-mode .mock-trading-toggle-btn {
+    background-color: #2e7d32;
+    color: #f5f5f5;
+}
+
+.dark-mode .mock-trading-toggle-btn:hover {
+    background-color: #388e3c;
+}
+
+/* 모의 거래 상태 메시지 스타일 */
+.mock-trading-status {
+    margin-bottom: 10px;
+    padding: 12px 15px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid #ccc;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.dark-mode .mock-trading-status {
+    background-color: #333;
+    border-left-color: #555;
+}
+
+.status-message {
+    display: block;
+    padding: 8px 12px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.status-message.active {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    color: #0d47a1;
+}
+
+.status-message.waiting {
+    background-color: #fff8e1;
+    border-left: 4px solid #ffc107;
+    color: #ff6f00;
+}
+
+.status-message.inactive {
+    background-color: #f5f5f5;
+    border-left: 4px solid #9e9e9e;
+    color: #616161;
+}
+
+.status-message strong {
+    font-weight: 600;
+}
+
+.status-message .profit {
+    color: #4caf50;
+}
+
+.status-message .loss {
+    color: #f44336;
+}
+
+/* 신호 강도 표시 애니메이션 */
+@keyframes pulse {
+    0% { opacity: 0.7; }
+    50% { opacity: 1; }
+    100% { opacity: 0.7; }
+}
+
+.status-message.waiting strong {
+    animation: pulse 1.5s infinite;
+    color: #FFC107;
+}
+
+/* 거래 상태 표시 스타일 */
+.trade-status {
+    font-size: 11px;
+    font-weight: normal;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 3px;
+}
+
+.trade-status.active {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: #2E7D32;
+}
+
+.trade-status.closed {
+    background-color: rgba(158, 158, 158, 0.2);
+    color: #616161;
+}
+
+.dark-mode .trade-status.active {
+    background-color: rgba(76, 175, 80, 0.3);
+    color: #81C784;
+}
+
+.dark-mode .trade-status.closed {
+    background-color: rgba(158, 158, 158, 0.3);
+    color: #E0E0E0;
+}
+
+/* 활성 거래 행 스타일 */
+.trading-history-table .active-trade {
+    font-weight: 500;
+}
+
+/* 컬럼별 너비 조정 */
+.trading-history-table th:nth-child(1), /* 시간 */
+.trading-history-table td:nth-child(1) {
+    width: 10%;
+}
+
+.trading-history-table th:nth-child(2), /* 유형 */
+.trading-history-table td:nth-child(2) {
+    width: 8%;
+}
+
+.trading-history-table th:nth-child(3), /* 거래가 */
+.trading-history-table td:nth-child(3),
+.trading-history-table th:nth-child(6), /* 현재가 */
+.trading-history-table td:nth-child(6) {
+    width: 12%;
+    text-align: right;
+}
+
+.trading-history-table th:nth-child(4), /* 수량 */
+.trading-history-table td:nth-child(4) {
+    width: 15%;
+    text-align: right;
+}
+
+.trading-history-table th:nth-child(5), /* 금액 */
+.trading-history-table td:nth-child(5),
+.trading-history-table th:nth-child(8), /* 현재가치 */
+.trading-history-table td:nth-child(8) {
+    width: 15%;
+    text-align: right;
+}
+
+.trading-history-table th:nth-child(7), /* 수익률 */
+.trading-history-table td:nth-child(7) {
+    width: 10%;
+    text-align: right;
+}
+
+/* 모의 거래 설정 스타일 */
+.mock-trading-settings {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+}
+
+.dark-mode .mock-trading-settings {
+    background-color: #2a2a2a;
+    border-color: #444;
+}
+
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.setting-item {
+    display: flex;
+    align-items: center;
+    margin-right: 10px;
+    flex: 1;
+}
+
+.setting-label {
+    font-size: 13px;
+    margin-right: 8px;
+    white-space: nowrap;
+}
+
+.profit-threshold, .loss-threshold {
+    width: 60px;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: center;
+}
+
+.dark-mode .profit-threshold, .dark-mode .loss-threshold {
+    background-color: #333;
+    border-color: #555;
+    color: #eee;
 } 

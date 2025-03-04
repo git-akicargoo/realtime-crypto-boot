@@ -341,6 +341,124 @@
             background-color: var(--neutral-color);
         }
 
+        /* 모의 거래 스타일 */
+        .mock-trading-section {
+            margin-top: 20px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 15px;
+        }
+
+        .mock-trading-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .mock-trading-title {
+            font-weight: bold;
+        }
+
+        /* 토글 스위치 스타일 */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--border-color);
+            transition: .4s;
+            border-radius: 20px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: var(--accent-color);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        /* 슬라이더 스타일 */
+        .signal-threshold-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            outline: none;
+        }
+
+        .signal-threshold-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+        }
+
+        .signal-threshold-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+        }
+
+        /* 거래 내역 테이블 스타일 */
+        .trading-history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+        .trading-history-table th,
+        .trading-history-table td {
+            padding: 5px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .trading-history-table th {
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .trading-history-table .buy-action {
+            color: var(--positive-color);
+        }
+
+        .trading-history-table .sell-action {
+            color: var(--negative-color);
+        }
+
         @media (max-width: 768px) {
             .form-container {
                 grid-template-columns: 1fr;
@@ -390,7 +508,7 @@
                         <option value="SWING">스윙 (Swing Trading)</option>
                     </select>
                 </div>
-            </div>
+                </div>
             <button id="startAnalysis">분석 시작</button>
             
             <div class="status-panel">
@@ -400,7 +518,7 @@
                     <div class="status-item">Kafka: <span id="kafkaStatus">확인 중...</span></div>
                     <div class="status-item">Service: <span id="serviceStatus">확인 중...</span></div>
                 </div>
-            </div>
+                </div>
         </div>
 
         <div class="analysis-results-section">
@@ -608,9 +726,9 @@
             try {
                 console.log('코인 목록 로드:', exchange, quoteCurrency);
                 if (!exchange || !quoteCurrency || !data) {
-                    return;
-                }
-                
+                return;
+            }
+            
                 const symbolSelect = document.getElementById('symbol');
                 
                 if (!symbolSelect) {
@@ -638,7 +756,7 @@
                 // 코인 선택 활성화
                 symbolSelect.disabled = false;
                 
-            } catch (error) {
+                } catch (error) {
                 console.error('코인 목록 처리 오류:', error);
                 
                 const symbolSelect = document.getElementById('symbol');
@@ -666,12 +784,12 @@
                         <button class="stop-button" style="display: none;">중지</button>
                         <button class="retry-button" style="display: none;">재시도</button>
                         <button class="delete-button">삭제</button>
-                    </div>
                 </div>
+                    </div>
                 <div class="loading-indicator" style="display: none;">
                     <div class="spinner"></div>
                     <span>분석 데이터 로딩 중...</span>
-                </div>
+                    </div>
                 <div class="card-content">
                     <div class="price-section">
                         <div class="current-price">-</div>
@@ -681,20 +799,20 @@
                         <div class="indicator-item">
                             <div class="indicator-label">이동평균선:</div>
                             <div class="indicator-value sma-signal neutral">대기중</div>
-                        </div>
+                    </div>
                         <div class="indicator-item">
                             <div class="indicator-label">RSI:</div>
                             <div class="indicator-value rsi-value neutral">-</div>
-                        </div>
+                    </div>
                         <div class="indicator-item">
                             <div class="indicator-label">볼린저밴드:</div>
                             <div class="indicator-value bb-signal neutral">대기중</div>
-                        </div>
+                    </div>
                         <div class="indicator-item">
                             <div class="indicator-label">거래량변화:</div>
                             <div class="indicator-value volume-signal neutral">-</div>
-                        </div>
                     </div>
+                </div>
                     <div class="market-section">
                         <div class="market-label">시장상태:</div>
                         <div class="market-condition neutral">대기중</div>
@@ -713,9 +831,56 @@
                     <div class="message-section">
                         <div class="analysis-message">분석이 시작되면 여기에 결과가 표시됩니다.</div>
                     </div>
+                    
+                    <!-- 모의 거래 섹션 -->
+                    <div class="mock-trading-section">
+                        <div class="mock-trading-header">
+                            <div class="mock-trading-title">모의 거래</div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" class="mock-trading-toggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="mock-trading-settings" style="display: none;">
+                            <div class="setting-item">
+                                <label style="display: flex; align-items: center;">
+                                    <input type="checkbox" class="auto-trading-toggle">
+                                    <span>자동 거래 활성화</span>
+                                </label>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span>매수 신호 강도 기준값</span>
+                                    <span class="signal-threshold-value">50%</span>
+                                </div>
+                                <input type="range" class="signal-threshold-slider" min="0" max="100" value="50">
+                            </div>
+                        </div>
+                        
+                        <div class="mock-trading-history" style="display: none;">
+                            <div style="font-weight: bold; margin-bottom: 8px;">거래 내역</div>
+                            <table class="trading-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>시간</th>
+                                        <th style="text-align: right;">가격</th>
+                                        <th style="text-align: right;">신호강도</th>
+                                        <th style="text-align: center;">액션</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="4" style="text-align: center; padding: 10px;">거래 내역이 없습니다.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             `;
-            
+
             // 이벤트 리스너 설정
             const startBtn = card.querySelector('.start-button');
             const stopBtn = card.querySelector('.stop-button');
@@ -739,6 +904,9 @@
             deleteBtn.addEventListener('click', function() {
                 deleteAnalysisCard(exchange, currencyPair, symbol, quoteCurrency, card);
             });
+            
+            // 모의 거래 초기화
+            initMockTrading(card, exchange, currencyPair, symbol, quoteCurrency);
             
             return card;
         }
@@ -859,7 +1027,7 @@
                         signalStrengthBar.className = 'signal-strength-bar strong-buy';
                     } else if (strength >= 50) {
                         signalStrengthBar.className = 'signal-strength-bar moderate-buy';
-                    } else {
+            } else {
                         signalStrengthBar.className = 'signal-strength-bar weak-buy';
                     }
                     
@@ -897,6 +1065,28 @@
                 const messageElement = card.querySelector('.analysis-message');
                 if (messageElement && data.message) {
                     messageElement.textContent = data.message;
+                }
+                
+                // 모의 거래 실행
+                // 카드 ID 추출
+                const cardId = card.id;
+                if (cardId) {
+                    // ID에서 거래소와 통화쌍 추출
+                    const parts = cardId.split('-');
+                    if (parts.length >= 2) {
+                        const exchange = parts[0];
+                        const currencyPair = parts.slice(1).join('-');
+                        
+                        // 통화쌍에서 심볼과 기준화폐 추출
+                        const pairParts = currencyPair.split('-');
+                        if (pairParts.length === 2) {
+                            const quoteCurrency = pairParts[0];
+                            const symbol = pairParts[1];
+                            
+                            // 모의 거래 실행
+                            executeMockTrading(card, exchange, currencyPair, symbol, quoteCurrency, data);
+                        }
+                    }
                 }
                 
                 console.log('카드 업데이트 완료');
@@ -949,10 +1139,10 @@
                     
                     // 분석 시작 명령 전송
                     const startRequest = {
-                        command: 'start',
-                        data: {
-                            exchange: exchange,
-                            currencyPair: currencyPair,
+                command: 'start',
+                data: {
+                    exchange: exchange,
+                    currencyPair: currencyPair,
                             symbol: symbol,
                             quoteCurrency: quoteCurrency,
                             tradingStyle: tradingStyle
@@ -1030,7 +1220,7 @@
                             // 카드 업데이트
                             updateCardWithAnalysisResult(card, analysisData);
                         }
-                    } catch (error) {
+                } catch (error) {
                         console.error('메시지 처리 중 오류:', error);
                         
                         // 오류 발생해도 로딩 숨기기
@@ -1246,6 +1436,217 @@
             // 선택 초기화
             document.getElementById('symbol').selectedIndex = 0;
         }
+
+        // 모의 거래 관련 코드 시작
+        // 모의 거래 상태 저장 객체
+        const mockTradingState = {};
+
+        // 모의 거래 초기화 함수
+        function initMockTrading(card, exchange, currencyPair, symbol, quoteCurrency) {
+            const cardId = `${exchange}-${currencyPair}`.toLowerCase();
+            
+            // 상태 초기화
+            mockTradingState[cardId] = {
+                enabled: false,
+                autoTrading: false,
+                signalThreshold: 50,
+                history: [],
+                balance: {
+                    fiat: 1000000, // 초기 법정화폐 잔액 (예: 100만원)
+                    crypto: 0      // 초기 암호화폐 잔액
+                },
+                lastPrice: 0,
+                lastAction: null
+            };
+            
+            // 토글 버튼 이벤트 리스너
+            const mockTradingToggle = card.querySelector('.mock-trading-toggle');
+            const mockTradingSettings = card.querySelector('.mock-trading-settings');
+            const mockTradingHistory = card.querySelector('.mock-trading-history');
+            
+            mockTradingToggle.addEventListener('change', function() {
+                const isEnabled = this.checked;
+                mockTradingState[cardId].enabled = isEnabled;
+                
+                // 설정 패널과 거래 내역 표시/숨김
+                mockTradingSettings.style.display = isEnabled ? 'block' : 'none';
+                mockTradingHistory.style.display = isEnabled ? 'block' : 'none';
+                
+                console.log(`모의 거래 ${isEnabled ? '활성화' : '비활성화'}: ${cardId}`);
+            });
+            
+            // 자동 거래 토글 이벤트 리스너
+            const autoTradingToggle = card.querySelector('.auto-trading-toggle');
+            autoTradingToggle.addEventListener('change', function() {
+                mockTradingState[cardId].autoTrading = this.checked;
+                console.log(`자동 거래 ${this.checked ? '활성화' : '비활성화'}: ${cardId}`);
+            });
+            
+            // 신호 강도 슬라이더 이벤트 리스너
+            const signalThresholdSlider = card.querySelector('.signal-threshold-slider');
+            const signalThresholdValue = card.querySelector('.signal-threshold-value');
+            
+            signalThresholdSlider.addEventListener('input', function() {
+                const threshold = parseInt(this.value);
+                mockTradingState[cardId].signalThreshold = threshold;
+                signalThresholdValue.textContent = `${threshold}%`;
+            });
+            
+            console.log(`모의 거래 초기화 완료: ${cardId}`);
+        }
+
+        // 모의 거래 실행 함수
+        function executeMockTrading(card, exchange, currencyPair, symbol, quoteCurrency, analysisData) {
+            const cardId = `${exchange}-${currencyPair}`.toLowerCase();
+            const state = mockTradingState[cardId];
+            
+            // 모의 거래가 활성화되지 않았으면 종료
+            if (!state || !state.enabled) {
+                return;
+            }
+            
+            // 현재 가격 가져오기
+            const currentPrice = analysisData.currentPrice;
+            if (!currentPrice) {
+                console.log('가격 정보가 없어 모의 거래를 실행할 수 없습니다.');
+                return;
+            }
+            
+            // 마지막 가격 업데이트
+            state.lastPrice = currentPrice;
+            
+            // 자동 거래가 활성화되지 않았으면 종료
+            if (!state.autoTrading) {
+                return;
+            }
+            
+            // 매수 신호 강도 확인
+            let buySignalStrength = 0;
+            
+            // 1. 직접적인 buySignalStrength 값 확인
+            if (analysisData.buySignalStrength !== undefined && analysisData.buySignalStrength !== null) {
+                buySignalStrength = analysisData.buySignalStrength;
+            } 
+            // 2. 메시지에서 강도 추출 시도
+            else if (analysisData.message) {
+                const match = analysisData.message.match(/매수 신호 강도: (\d+\.?\d*)%/);
+                if (match && match[1]) {
+                    buySignalStrength = parseFloat(match[1]);
+                }
+            }
+            
+            console.log(`매수 신호 강도: ${buySignalStrength}%, 기준값: ${state.signalThreshold}%`);
+            
+            // 거래 결정
+            let action = null;
+            
+            // 매수 신호 강도가 기준값보다 높으면 매수
+            if (buySignalStrength >= state.signalThreshold && state.balance.fiat > 0) {
+                // 매수 금액 계산 (잔액의 10%)
+                const buyAmount = state.balance.fiat * 0.1;
+                const cryptoAmount = buyAmount / currentPrice;
+                
+                // 잔액 업데이트
+                state.balance.fiat -= buyAmount;
+                state.balance.crypto += cryptoAmount;
+                
+                action = 'BUY';
+                state.lastAction = action;
+                
+                console.log(`매수 실행: ${buyAmount.toLocaleString('ko-KR')}원, ${cryptoAmount.toFixed(8)} ${symbol}`);
+            }
+            // 매수 신호 강도가 기준값의 절반 미만이고 보유 암호화폐가 있으면 매도
+            else if (buySignalStrength < state.signalThreshold / 2 && state.balance.crypto > 0) {
+                // 매도 금액 계산 (보유량의 50%)
+                const sellCryptoAmount = state.balance.crypto * 0.5;
+                const sellAmount = sellCryptoAmount * currentPrice;
+                
+                // 잔액 업데이트
+                state.balance.fiat += sellAmount;
+                state.balance.crypto -= sellCryptoAmount;
+                
+                action = 'SELL';
+                state.lastAction = action;
+                
+                console.log(`매도 실행: ${sellCryptoAmount.toFixed(8)} ${symbol}, ${sellAmount.toLocaleString('ko-KR')}원`);
+            }
+            
+            // 거래 내역 추가
+            if (action) {
+                const tradeRecord = {
+                    timestamp: new Date(),
+                    price: currentPrice,
+                    signalStrength: buySignalStrength,
+                    action: action
+                };
+                
+                state.history.unshift(tradeRecord); // 최신 거래를 앞에 추가
+                
+                // 최대 5개 거래 내역만 유지
+                if (state.history.length > 5) {
+                    state.history.pop();
+                }
+                
+                // 거래 내역 테이블 업데이트
+                updateTradingHistoryTable(card, state.history);
+            }
+        }
+
+        // 거래 내역 테이블 업데이트 함수
+        function updateTradingHistoryTable(card, history) {
+            const tableBody = card.querySelector('.trading-history-table tbody');
+            if (!tableBody) {
+                console.error('거래 내역 테이블을 찾을 수 없습니다.');
+                return;
+            }
+            
+            // 테이블 내용 초기화
+            tableBody.innerHTML = '';
+            
+            // 거래 내역이 없으면 메시지 표시
+            if (history.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="4" style="text-align: center; padding: 10px;">거래 내역이 없습니다.</td>`;
+                tableBody.appendChild(row);
+                return;
+            }
+            
+            // 거래 내역 행 추가
+            history.forEach(record => {
+                const row = document.createElement('tr');
+                
+                // 시간 형식화
+                const time = record.timestamp.toLocaleTimeString('ko-KR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                // 액션 클래스 결정
+                const actionClass = record.action === 'BUY' ? 'buy-action' : 'sell-action';
+                const actionText = record.action === 'BUY' ? '매수' : '매도';
+                
+                row.innerHTML = `
+                    <td>${time}</td>
+                    <td style="text-align: right;">${formatPrice(record.price)}</td>
+                    <td style="text-align: right;">${formatPercent(record.signalStrength)}</td>
+                    <td style="text-align: center;" class="${actionClass}">${actionText}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+
+        // 모의 거래 관련 코드 끝
     </script>
+    
+    <!-- 유틸리티 스크립트 -->
+    <script src="analysis-src/js/utils/formatters.js"></script>
+    
+    <!-- 컴포넌트 스크립트 -->
+    <script src="analysis-src/js/components/card.js"></script>
+    
+    <!-- 서비스 스크립트 -->
+    <script src="analysis-src/js/services/websocket.js"></script>
 </body>
 </html> 
