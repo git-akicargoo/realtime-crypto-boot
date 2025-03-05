@@ -941,8 +941,8 @@
                 
                 // 이동 평균선 신호 업데이트
                 const smaSignal = card.querySelector('.sma-signal');
-                if (smaSignal && data.smaSignal) {
-                    const signalValue = data.smaSignal;
+                if (smaSignal) {
+                    const signalValue = data.smaSignal || 'NEUTRAL';
                     smaSignal.textContent = signalValue;
                     smaSignal.className = 'indicator-value sma-signal ' + 
                         (signalValue === 'BULLISH' || signalValue === 'MODERATELY_BULLISH' || signalValue === 'SLIGHTLY_BULLISH' ? 'positive' : 
@@ -962,8 +962,8 @@
                 
                 // 볼린저 밴드 신호 업데이트
                 const bbSignal = card.querySelector('.bb-signal');
-                if (bbSignal && data.bollingerSignal) {
-                    const signalValue = data.bollingerSignal;
+                if (bbSignal) {
+                    const signalValue = data.bollingerSignal || 'INSIDE';
                     bbSignal.textContent = signalValue;
                     bbSignal.className = 'indicator-value bb-signal ' + 
                         (signalValue === 'LOWER_TOUCH' ? 'positive' : 
@@ -987,26 +987,51 @@
                     console.log('거래량 변화 업데이트:', data.volumeChangePercent);
                 }
                 
-                // 시장 상태 업데이트
+                // 시장 상태 업데이트 - RSI 기반 보완
                 const marketCondition = card.querySelector('.market-condition');
-                if (marketCondition && data.marketCondition) {
-                    const condition = data.marketCondition;
-                    marketCondition.textContent = condition;
+                if (marketCondition) {
+                    let condition = data.marketCondition || 'NEUTRAL';
+                    
+                    // 시장 상태 텍스트 설정
+                    let conditionText = condition;
+                    if (condition === 'OVERSOLD') {
+                        conditionText = '과매도 상태';
+                    } else if (condition === 'OVERBOUGHT') {
+                        conditionText = '과매수 상태';
+                    } else if (condition === 'NEUTRAL') {
+                        conditionText = '중립 상태';
+                    }
+                    
+                    marketCondition.textContent = conditionText;
                     marketCondition.className = 'market-condition ' + 
                         (condition === 'OVERSOLD' ? 'positive' : 
                          condition === 'OVERBOUGHT' ? 'negative' : 'neutral');
-                    console.log('시장 상태 업데이트:', condition);
+                    console.log('시장 상태 업데이트:', conditionText);
                 }
                 
-                // 매수 신호 강도 업데이트 - 직접 필드 사용
+                // 매수 신호 강도 업데이트 - 메시지 파싱 보완
                 const signalStrengthValue = card.querySelector('.signal-strength-value');
                 const signalStrengthBar = card.querySelector('.signal-strength-bar');
                 
-                if (signalStrengthValue && signalStrengthBar && data.buySignalStrength !== undefined) {
-                    const strength = data.buySignalStrength;
-                    signalStrengthValue.textContent = strength.toFixed(1) + '%';
-                    signalStrengthBar.style.width = strength + '%';
-                    console.log('매수 신호 강도 업데이트:', strength);
+                if (signalStrengthValue && signalStrengthBar) {
+                    let strength = data.buySignalStrength || 0;
+                    
+                    // 값이 있을 때만 업데이트
+                    if (strength > 0) {
+                        signalStrengthValue.textContent = strength.toFixed(1) + '%';
+                        signalStrengthBar.style.width = strength + '%';
+                        
+                        // 강도에 따른 색상 설정
+                        if (strength >= 70) {
+                            signalStrengthBar.className = 'signal-strength-bar strong-buy';
+                        } else if (strength >= 50) {
+                            signalStrengthBar.className = 'signal-strength-bar moderate-buy';
+            } else {
+                            signalStrengthBar.className = 'signal-strength-bar weak-buy';
+                        }
+                        
+                        console.log('매수 신호 강도 업데이트:', strength + '%');
+                    }
                 }
                 
                 // 분석 결과 업데이트
@@ -1156,53 +1181,42 @@
                                 analysisData.smaSignal = 'NEUTRAL';
                             }
                             
+                            // 시장 상태가 null이면 RSI 신호를 기반으로 설정
                             if (analysisData.marketCondition === undefined || analysisData.marketCondition === null) {
-                                analysisData.marketCondition = 'NEUTRAL';
+                                if (analysisData.rsiSignal === 'OVERSOLD') {
+                                    analysisData.marketCondition = 'OVERSOLD';
+                                } else if (analysisData.rsiSignal === 'OVERBOUGHT') {
+                                    analysisData.marketCondition = 'OVERBOUGHT';
+                                } else {
+                                    analysisData.marketCondition = 'NEUTRAL';
+                                }
+                                console.log('시장 상태 자동 설정:', analysisData.marketCondition);
                             }
                             
-                            // 직접 필드 사용 - 메시지에서 추출하지 않음
+                            // 매수 신호 강도가 0이거나 null이면 메시지에서 추출
+                            if ((analysisData.buySignalStrength === undefined || analysisData.buySignalStrength === 0 || analysisData.buySignalStrength === null) && analysisData.message) {
+                                const match = analysisData.message.match(/매수 신호 강도: (\d+\.?\d*)%/);
+                                if (match && match[1]) {
+                                    analysisData.buySignalStrength = parseFloat(match[1]);
+                                    console.log('메시지에서 매수 신호 강도 추출:', analysisData.buySignalStrength);
+                                }
+                            }
+                            
+                            // 트레이딩 스타일이 null이면 메시지에서 추출
+                            if ((analysisData.tradingStyle === undefined || analysisData.tradingStyle === null) && analysisData.message) {
+                                const match = analysisData.message.match(/트레이딩 스타일: (\w+)/);
+                                if (match && match[1]) {
+                                    const styleMap = {
+                                        '초단타': 'SCALPING',
+                                        '단타': 'DAY_TRADING',
+                                        '스윙': 'SWING'
+                                    };
+                                    analysisData.tradingStyle = styleMap[match[1]] || 'DAY_TRADING';
+                                    console.log('메시지에서 트레이딩 스타일 추출:', match[1], '->', analysisData.tradingStyle);
+                                }
+                            }
+                            
                             console.log('처리된 분석 데이터:', analysisData);
-                            
-                            // 현재 가격 직접 업데이트
-                            if (analysisData.currentPrice !== undefined) {
-                                const priceValue = card.querySelector('.current-price');
-                                if (priceValue) {
-                                    priceValue.textContent = formatPrice(analysisData.currentPrice);
-                                    console.log('현재 가격 업데이트:', analysisData.currentPrice);
-                                }
-                            }
-                            
-                            // 분석 결과 직접 업데이트
-                            if (analysisData.analysisResult) {
-                                const resultValue = card.querySelector('.result-value');
-                                if (resultValue) {
-                                    resultValue.textContent = analysisData.analysisResult;
-                                    resultValue.className = 'result-value ' + 
-                                        (analysisData.analysisResult === 'BUY' || analysisData.analysisResult === 'STRONG_BUY' ? 'positive' : 
-                                         analysisData.analysisResult === 'SELL' || analysisData.analysisResult === 'STRONG_SELL' ? 'negative' : 'neutral');
-                                    console.log('분석 결과 업데이트:', analysisData.analysisResult);
-                                }
-                            }
-                            
-                            // 메시지 직접 업데이트
-                            if (analysisData.message) {
-                                const messageElement = card.querySelector('.analysis-message');
-                                if (messageElement) {
-                                    messageElement.textContent = analysisData.message;
-                                    console.log('메시지 업데이트:', analysisData.message);
-                                }
-                            }
-                            
-                            // 신호 강도 직접 업데이트
-                            if (analysisData.buySignalStrength !== undefined) {
-                                const signalStrengthValue = card.querySelector('.signal-strength-value');
-                                const signalStrengthBar = card.querySelector('.signal-strength-bar');
-                                if (signalStrengthValue && signalStrengthBar) {
-                                    signalStrengthValue.textContent = analysisData.buySignalStrength.toFixed(1) + '%';
-                                    signalStrengthBar.style.width = analysisData.buySignalStrength + '%';
-                                    console.log('신호 강도 업데이트:', analysisData.buySignalStrength);
-                                }
-                            }
                             
                             // 카드 업데이트
                             updateCardWithAnalysisResult(card, analysisData);
