@@ -1105,11 +1105,16 @@ const CardComponent = (function() {
         }
         
         // 신호 강도 업데이트
-        const signalStrengthElement = card.querySelector('.signal-strength-value');
-        if (signalStrengthElement && data.signalStrength) {
-            signalStrengthElement.textContent = data.signalStrength + '%';
-        } else if (signalStrengthElement && data.buySignalStrength) {
-            signalStrengthElement.textContent = data.buySignalStrength + '%';
+        const signalStrengthValue = card.querySelector('.signal-strength-value');
+        const signalStrengthBar = card.querySelector('.signal-strength-bar');
+        if (signalStrengthValue && signalStrengthBar) {
+            let strength = card.signalStrength || 0;
+            
+            if (strength > 0) {
+                signalStrengthValue.textContent = strength + '%';
+                signalStrengthBar.style.width = strength + '%';
+                console.log(`[${cardId}] 신호 강도 업데이트: ${strength}%`);
+            }
         }
         
         // 모의 거래 UI 업데이트
@@ -1283,6 +1288,7 @@ const CardComponent = (function() {
 
         const cardId = card.id;
         console.log(`[${cardId}] WebSocket 메시지 처리 시작`);
+        console.log(`[${cardId}] 수신된 데이터:`, data);
 
         // 현재 가격 업데이트
         if (data.currentPrice !== undefined) {
@@ -1291,21 +1297,11 @@ const CardComponent = (function() {
             card.currentPrice = data.currentPrice;
         }
 
-        // 신호 강도 추출
-        let signalStrength = 0;
+        // 신호 강도 직접 사용
         if (data.buySignalStrength !== undefined) {
-            signalStrength = data.buySignalStrength;
-        } else if (data.message) {
-            const match = data.message.match(/매수 신호 강도: (\d+\.?\d*)%/);
-            if (match && match[1]) {
-                signalStrength = parseFloat(match[1]);
-            }
-        }
-
-        if (signalStrength > 0) {
-            console.log(`[${cardId}] 신호 강도 업데이트: ${signalStrength}%`);
+            console.log(`[${cardId}] 매수 신호 강도 업데이트: ${data.buySignalStrength}%`);
             // 카드 객체에 신호 강도 저장
-            card.signalStrength = signalStrength;
+            card.signalStrength = data.buySignalStrength;
         }
 
         // 자동 거래가 활성화되어 있지 않은 경우 UI 업데이트
@@ -1357,8 +1353,8 @@ const CardComponent = (function() {
         if (resultValue && data.analysisResult) {
             resultValue.textContent = data.analysisResult;
             resultValue.className = 'result-value ' + 
-                (data.analysisResult === 'BUY' ? 'positive' : 
-                 data.analysisResult === 'SELL' ? 'negative' : 'neutral');
+                (data.analysisResult === 'BUY' || data.analysisResult === 'STRONG_BUY' ? 'positive' : 
+                 data.analysisResult === 'SELL' || data.analysisResult === 'STRONG_SELL' ? 'negative' : 'neutral');
             console.log(`[${cardId}] 분석 결과 업데이트: ${data.analysisResult}`);
         }
 
@@ -1371,8 +1367,8 @@ const CardComponent = (function() {
             const condition = data.marketCondition;
             marketCondition.textContent = condition;
             marketCondition.className = 'market-condition ' + 
-                (condition === 'BULLISH' ? 'positive' : 
-                 condition === 'BEARISH' ? 'negative' : 'neutral');
+                (condition === 'OVERBOUGHT' ? 'negative' : 
+                 condition === 'OVERSOLD' ? 'positive' : 'neutral');
             console.log(`[${cardId}] 시장 상태 업데이트: ${condition}`);
         }
 
@@ -1385,8 +1381,8 @@ const CardComponent = (function() {
 
         // 볼린저 밴드 신호 업데이트
         const bbSignal = card.querySelector('.bb-signal');
-        if (bbSignal && data.bollingerBandsSignal) {
-            const signalValue = data.bollingerBandsSignal;
+        if (bbSignal && data.bollingerSignal) {
+            const signalValue = data.bollingerSignal;
             bbSignal.textContent = signalValue;
             bbSignal.className = 'indicator-value bb-signal ' + 
                 (signalValue === 'LOWER_TOUCH' ? 'positive' : 
@@ -1398,10 +1394,10 @@ const CardComponent = (function() {
         const signalStrengthValue = card.querySelector('.signal-strength-value');
         const signalStrengthBar = card.querySelector('.signal-strength-bar');
         if (signalStrengthValue && signalStrengthBar) {
-            let strength = card.signalStrength || 0;
+            let strength = data.buySignalStrength !== undefined ? data.buySignalStrength : (card.signalStrength || 0);
             
             if (strength > 0) {
-                signalStrengthValue.textContent = strength + '%';
+                signalStrengthValue.textContent = strength.toFixed(1) + '%';
                 signalStrengthBar.style.width = strength + '%';
                 console.log(`[${cardId}] 신호 강도 업데이트: ${strength}%`);
             }
@@ -1422,8 +1418,8 @@ const CardComponent = (function() {
             const signalValue = data.smaSignal;
             smaSignal.textContent = signalValue;
             smaSignal.className = 'indicator-value sma-signal ' + 
-                (signalValue === 'BULLISH' ? 'positive' : 
-                 signalValue === 'BEARISH' ? 'negative' : 'neutral');
+                (signalValue === 'BULLISH' || signalValue === 'MODERATELY_BULLISH' || signalValue === 'SLIGHTLY_BULLISH' ? 'positive' : 
+                 signalValue === 'BEARISH' || signalValue === 'MODERATELY_BEARISH' || signalValue === 'SLIGHTLY_BEARISH' ? 'negative' : 'neutral');
             console.log(`[${cardId}] SMA 신호 업데이트: ${signalValue}`);
         }
         

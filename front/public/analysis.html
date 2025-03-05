@@ -927,6 +927,7 @@
                 const priceValue = card.querySelector('.current-price');
                 if (priceValue && data.currentPrice !== undefined) {
                     priceValue.textContent = formatPrice(data.currentPrice);
+                    console.log('가격 업데이트:', data.currentPrice);
                 }
                 
                 // 가격 변화 업데이트
@@ -935,41 +936,39 @@
                     const changeValue = data.priceChangePercent;
                     priceChange.textContent = formatPercent(changeValue);
                     priceChange.className = 'price-change ' + (changeValue > 0 ? 'positive' : changeValue < 0 ? 'negative' : 'neutral');
+                    console.log('가격 변화 업데이트:', changeValue);
                 }
                 
                 // 이동 평균선 신호 업데이트
                 const smaSignal = card.querySelector('.sma-signal');
-                if (smaSignal) {
-                    // 기본값 설정
-                    const signalValue = data.smaSignal || 'NEUTRAL';
+                if (smaSignal && data.smaSignal) {
+                    const signalValue = data.smaSignal;
                     smaSignal.textContent = signalValue;
                     smaSignal.className = 'indicator-value sma-signal ' + 
-                        (signalValue === 'BULLISH' ? 'positive' : 
-                         signalValue === 'BEARISH' ? 'negative' : 'neutral');
+                        (signalValue === 'BULLISH' || signalValue === 'MODERATELY_BULLISH' || signalValue === 'SLIGHTLY_BULLISH' ? 'positive' : 
+                         signalValue === 'BEARISH' || signalValue === 'MODERATELY_BEARISH' || signalValue === 'SLIGHTLY_BEARISH' ? 'negative' : 'neutral');
+                    console.log('SMA 신호 업데이트:', signalValue);
                 }
                 
                 // RSI 값 업데이트
                 const rsiValue = card.querySelector('.rsi-value');
-                if (rsiValue) {
-                    if (data.rsiValue !== undefined && data.rsiValue > 0) {
-                        rsiValue.textContent = data.rsiValue.toFixed(1);
-                    } else {
-                        rsiValue.textContent = '-';
-                    }
-                    
+                if (rsiValue && data.rsiValue !== undefined) {
+                    rsiValue.textContent = data.rsiValue.toFixed(1);
                     rsiValue.className = 'indicator-value rsi-value ' + 
                         (data.rsiSignal === 'OVERSOLD' ? 'positive' : 
                          data.rsiSignal === 'OVERBOUGHT' ? 'negative' : 'neutral');
+                    console.log('RSI 값 업데이트:', data.rsiValue);
                 }
                 
                 // 볼린저 밴드 신호 업데이트
                 const bbSignal = card.querySelector('.bb-signal');
-                if (bbSignal) {
-                    const signalValue = data.bollingerSignal || 'INSIDE';
+                if (bbSignal && data.bollingerSignal) {
+                    const signalValue = data.bollingerSignal;
                     bbSignal.textContent = signalValue;
                     bbSignal.className = 'indicator-value bb-signal ' + 
                         (signalValue === 'LOWER_TOUCH' ? 'positive' : 
                          signalValue === 'UPPER_TOUCH' ? 'negative' : 'neutral');
+                    console.log('볼린저 밴드 신호 업데이트:', signalValue);
                 }
                 
                 // 거래량 신호 업데이트
@@ -985,111 +984,65 @@
                     }
                     
                     volumeSignal.className = 'indicator-value volume-signal ' + volumeClass;
+                    console.log('거래량 변화 업데이트:', data.volumeChangePercent);
                 }
                 
                 // 시장 상태 업데이트
                 const marketCondition = card.querySelector('.market-condition');
-                if (marketCondition) {
-                    const condition = data.marketCondition || 'NEUTRAL';
+                if (marketCondition && data.marketCondition) {
+                    const condition = data.marketCondition;
                     marketCondition.textContent = condition;
                     marketCondition.className = 'market-condition ' + 
-                        (condition === 'BULLISH' ? 'positive' : 
-                         condition === 'BEARISH' ? 'negative' : 'neutral');
+                        (condition === 'OVERSOLD' ? 'positive' : 
+                         condition === 'OVERBOUGHT' ? 'negative' : 'neutral');
+                    console.log('시장 상태 업데이트:', condition);
                 }
                 
-                // 매수 신호 강도 업데이트 - 더 강력한 방법으로
+                // 매수 신호 강도 업데이트 - 직접 필드 사용
                 const signalStrengthValue = card.querySelector('.signal-strength-value');
                 const signalStrengthBar = card.querySelector('.signal-strength-bar');
                 
-                if (signalStrengthValue && signalStrengthBar) {
-                    let strength = 0;
-                    
-                    // 1. 직접적인 buySignalStrength 값 확인
-                    if (data.buySignalStrength !== undefined && data.buySignalStrength !== null && data.buySignalStrength > 0) {
-                        strength = data.buySignalStrength;
-                    } 
-                    // 2. 메시지에서 강도 추출 시도
-                    else if (data.message) {
-                        const match = data.message.match(/매수 신호 강도: (\d+\.?\d*)%/);
-                        if (match && match[1]) {
-                            strength = parseFloat(match[1]);
-                        }
-                    }
-                    
-                    console.log('신호 강도 최종값:', strength);
-                    
-                    // 값 업데이트
-                    signalStrengthValue.textContent = formatPercent(strength);
-                    signalStrengthBar.style.width = `${strength}%`;
-                    
-                    // 색상 클래스 설정
-                    if (strength >= 70) {
-                        signalStrengthBar.className = 'signal-strength-bar strong-buy';
-                    } else if (strength >= 50) {
-                        signalStrengthBar.className = 'signal-strength-bar moderate-buy';
-            } else {
-                        signalStrengthBar.className = 'signal-strength-bar weak-buy';
-                    }
-                    
-                    // CSS 스타일 강제 적용
-                    signalStrengthBar.style.backgroundColor = strength >= 70 ? 'var(--positive-color)' : 
-                                                          strength >= 50 ? 'var(--neutral-color)' : 
-                                                          'var(--negative-color)';
-                    signalStrengthBar.style.height = '100%';
-                    signalStrengthBar.style.display = 'block';
-                    
-                    // 컨테이너 스타일 강제 적용
-                    const container = card.querySelector('.signal-strength-container');
-                    if (container) {
-                        container.style.display = 'block';
-                        container.style.width = '100%';
-                        container.style.height = '10px';
-                        container.style.backgroundColor = 'var(--bg-secondary)';
-                        container.style.borderRadius = '5px';
-                        container.style.overflow = 'hidden';
-                        container.style.marginTop = '5px';
-                    }
+                if (signalStrengthValue && signalStrengthBar && data.buySignalStrength !== undefined) {
+                    const strength = data.buySignalStrength;
+                    signalStrengthValue.textContent = strength.toFixed(1) + '%';
+                    signalStrengthBar.style.width = strength + '%';
+                    console.log('매수 신호 강도 업데이트:', strength);
                 }
                 
                 // 분석 결과 업데이트
                 const resultValue = card.querySelector('.result-value');
-                if (resultValue) {
-                    const result = data.analysisResult || 'NEUTRAL';
+                if (resultValue && data.analysisResult) {
+                    const result = data.analysisResult;
                     resultValue.textContent = result;
                     resultValue.className = 'result-value ' + 
-                        (result === 'BUY' ? 'positive' : 
-                         result === 'SELL' ? 'negative' : 'neutral');
+                        (result === 'BUY' || result === 'STRONG_BUY' ? 'positive' : 
+                         result === 'SELL' || result === 'STRONG_SELL' ? 'negative' : 'neutral');
+                    console.log('분석 결과 업데이트:', result);
                 }
                 
                 // 메시지 업데이트
                 const messageElement = card.querySelector('.analysis-message');
                 if (messageElement && data.message) {
                     messageElement.textContent = data.message;
-                }
-                
-                // 모의 거래 실행
-                // 카드 ID 추출
-                const cardId = card.id;
-                if (cardId) {
-                    // ID에서 거래소와 통화쌍 추출
-                    const parts = cardId.split('-');
-                    if (parts.length >= 2) {
-                        const exchange = parts[0];
-                        const currencyPair = parts.slice(1).join('-');
-                        
-                        // 통화쌍에서 심볼과 기준화폐 추출
-                        const pairParts = currencyPair.split('-');
-                        if (pairParts.length === 2) {
-                            const quoteCurrency = pairParts[0];
-                            const symbol = pairParts[1];
-                            
-                            // 모의 거래 실행
-                            executeMockTrading(card, exchange, currencyPair, symbol, quoteCurrency, data);
-                        }
-                    }
+                    console.log('메시지 업데이트:', data.message);
                 }
                 
                 console.log('카드 업데이트 완료');
+                
+                // 카드 ID에서 거래소와 통화쌍 추출
+                const cardId = card.id;
+                const parts = cardId.split('-');
+                if (parts.length >= 2) {
+                    const exchange = parts[0];
+                    const currencyPair = parts.slice(1).join('-');
+                    
+                    // 자동 거래 활성화 여부 확인
+                    const autoTradingCheckbox = card.querySelector('.auto-trading-toggle');
+                    if (autoTradingCheckbox && autoTradingCheckbox.checked) {
+                        // 자동 거래 실행
+                        executeMockTrade(card, data);
+                    }
+                }
             } catch (error) {
                 console.error('카드 업데이트 중 오류:', error);
             }
@@ -1207,15 +1160,49 @@
                                 analysisData.marketCondition = 'NEUTRAL';
                             }
                             
-                            // buySignalStrength가 없으면 메시지에서 추출
-                            if ((analysisData.buySignalStrength === undefined || analysisData.buySignalStrength === 0) && analysisData.message) {
-                                const match = analysisData.message.match(/매수 신호 강도: (\d+\.?\d*)%/);
-                                if (match && match[1]) {
-                                    analysisData.buySignalStrength = parseFloat(match[1]);
+                            // 직접 필드 사용 - 메시지에서 추출하지 않음
+                            console.log('처리된 분석 데이터:', analysisData);
+                            
+                            // 현재 가격 직접 업데이트
+                            if (analysisData.currentPrice !== undefined) {
+                                const priceValue = card.querySelector('.current-price');
+                                if (priceValue) {
+                                    priceValue.textContent = formatPrice(analysisData.currentPrice);
+                                    console.log('현재 가격 업데이트:', analysisData.currentPrice);
                                 }
                             }
                             
-                            console.log('처리된 분석 데이터:', analysisData);
+                            // 분석 결과 직접 업데이트
+                            if (analysisData.analysisResult) {
+                                const resultValue = card.querySelector('.result-value');
+                                if (resultValue) {
+                                    resultValue.textContent = analysisData.analysisResult;
+                                    resultValue.className = 'result-value ' + 
+                                        (analysisData.analysisResult === 'BUY' || analysisData.analysisResult === 'STRONG_BUY' ? 'positive' : 
+                                         analysisData.analysisResult === 'SELL' || analysisData.analysisResult === 'STRONG_SELL' ? 'negative' : 'neutral');
+                                    console.log('분석 결과 업데이트:', analysisData.analysisResult);
+                                }
+                            }
+                            
+                            // 메시지 직접 업데이트
+                            if (analysisData.message) {
+                                const messageElement = card.querySelector('.analysis-message');
+                                if (messageElement) {
+                                    messageElement.textContent = analysisData.message;
+                                    console.log('메시지 업데이트:', analysisData.message);
+                                }
+                            }
+                            
+                            // 신호 강도 직접 업데이트
+                            if (analysisData.buySignalStrength !== undefined) {
+                                const signalStrengthValue = card.querySelector('.signal-strength-value');
+                                const signalStrengthBar = card.querySelector('.signal-strength-bar');
+                                if (signalStrengthValue && signalStrengthBar) {
+                                    signalStrengthValue.textContent = analysisData.buySignalStrength.toFixed(1) + '%';
+                                    signalStrengthBar.style.width = analysisData.buySignalStrength + '%';
+                                    console.log('신호 강도 업데이트:', analysisData.buySignalStrength);
+                                }
+                            }
                             
                             // 카드 업데이트
                             updateCardWithAnalysisResult(card, analysisData);
@@ -1496,8 +1483,8 @@
         }
 
         // 모의 거래 실행 함수
-        function executeMockTrading(card, exchange, currencyPair, symbol, quoteCurrency, analysisData) {
-            const cardId = `${exchange}-${currencyPair}`.toLowerCase();
+        function executeMockTrade(card, data) {
+            const cardId = card.id;
             const state = mockTradingState[cardId];
             
             // 모의 거래가 활성화되지 않았으면 종료
@@ -1506,7 +1493,7 @@
             }
             
             // 현재 가격 가져오기
-            const currentPrice = analysisData.currentPrice;
+            const currentPrice = data.currentPrice;
             if (!currentPrice) {
                 console.log('가격 정보가 없어 모의 거래를 실행할 수 없습니다.');
                 return;
@@ -1524,12 +1511,12 @@
             let buySignalStrength = 0;
             
             // 1. 직접적인 buySignalStrength 값 확인
-            if (analysisData.buySignalStrength !== undefined && analysisData.buySignalStrength !== null) {
-                buySignalStrength = analysisData.buySignalStrength;
+            if (data.buySignalStrength !== undefined && data.buySignalStrength !== null && data.buySignalStrength > 0) {
+                buySignalStrength = data.buySignalStrength;
             } 
             // 2. 메시지에서 강도 추출 시도
-            else if (analysisData.message) {
-                const match = analysisData.message.match(/매수 신호 강도: (\d+\.?\d*)%/);
+            else if (data.message) {
+                const match = data.message.match(/매수 신호 강도: (\d+\.?\d*)%/);
                 if (match && match[1]) {
                     buySignalStrength = parseFloat(match[1]);
                 }
