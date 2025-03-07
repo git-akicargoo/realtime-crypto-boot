@@ -459,7 +459,7 @@ public class MarketAnalysisService {
         
         // 충분한 데이터가 없으면 기본값 반환
         if (history.size() < 5) {
-            log.warn("SMA 계산을 위한 충분한 데이터가 없습니다. 필요: 5, 실제: {}", history.size());
+            log.info("SMA 계산: 제한된 데이터로 전체 평균을 계산합니다. (데이터 수: {})", history.size());
             results.put("shortDiff", 0.0);
             results.put("mediumDiff", 0.0);
             results.put("longDiff", 0.0);
@@ -489,7 +489,7 @@ public class MarketAnalysisService {
                     .mapToDouble(d -> d.getPrice().doubleValue())
                     .average()
                     .orElse(currentPrice);
-                log.warn("단기 SMA 계산을 위한 충분한 데이터가 없습니다. 필요: {}, 실제: {}", shortPeriod, history.size());
+                log.info("단기 SMA 계산: 제한된 데이터로 전체 평균을 계산합니다. (데이터 수: {})", history.size());
             } else {
                 shortSMA = calculateMovingAverage(history, shortPeriod);
             }
@@ -499,7 +499,7 @@ public class MarketAnalysisService {
                     .mapToDouble(d -> d.getPrice().doubleValue())
                     .average()
                     .orElse(currentPrice);
-                log.warn("중기 SMA 계산을 위한 충분한 데이터가 없습니다. 필요: {}, 실제: {}", mediumPeriod, history.size());
+                log.info("중기 SMA 계산: 제한된 데이터로 전체 평균을 계산합니다. (데이터 수: {})", history.size());
             } else {
                 mediumSMA = calculateMovingAverage(history, mediumPeriod);
             }
@@ -509,7 +509,7 @@ public class MarketAnalysisService {
                     .mapToDouble(d -> d.getPrice().doubleValue())
                     .average()
                     .orElse(currentPrice);
-                log.warn("장기 SMA 계산을 위한 충분한 데이터가 없습니다. 필요: {}, 실제: {}", longPeriod, history.size());
+                log.info("장기 SMA 계산: 제한된 데이터로 전체 평균을 계산합니다. (데이터 수: {})", history.size());
             } else {
                 longSMA = calculateMovingAverage(history, longPeriod);
             }
@@ -592,7 +592,7 @@ public class MarketAnalysisService {
         
         // 충분한 데이터가 없으면 기본값 반환
         if (history.size() < period + 1) {
-            log.warn("RSI 계산을 위한 충분한 데이터가 없습니다. 필요: {}, 실제: {}", period + 1, history.size());
+            log.info("RSI 계산: 제한된 데이터로 계산합니다. (데이터 수: {})", history.size());
             results.put("value", 50.0);
             results.put("signal", "NEUTRAL");
             results.put("signalStrength", 50.0);
@@ -707,7 +707,7 @@ public class MarketAnalysisService {
         
         // 충분한 데이터가 없으면 기본값 반환
         if (history.size() < period) {
-            log.warn("볼린저 밴드 계산을 위한 충분한 데이터가 없습니다. 필요: {}, 실제: {}", period, history.size());
+            log.info("볼린저 밴드 계산: 제한된 데이터로 계산합니다. (데이터 수: {})", history.size());
             double currentPrice = history.get(history.size() - 1).getPrice().doubleValue();
             results.put("upper", currentPrice * 1.05);
             results.put("middle", currentPrice);
@@ -730,7 +730,7 @@ public class MarketAnalysisService {
                     .mapToDouble(d -> d.getPrice().doubleValue())
                     .average()
                     .orElse(currentPrice);
-                log.warn("볼린저 밴드 SMA 계산을 위한 충분한 데이터가 없습니다. 필요: {}, 실제: {}", period * 60, history.size());
+                log.info("볼린저 밴드 SMA 계산: 제한된 데이터로 계산합니다. (데이터 수: {})", history.size());
             } else {
                 middleBand = calculateMovingAverage(history, period * 60);
             }
