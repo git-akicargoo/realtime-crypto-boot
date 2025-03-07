@@ -487,6 +487,12 @@ function startNewAnalysis() {
         return;
     }
     
+    // CardComponent가 존재하는지 확인
+    if (!CardComponent) {
+        console.error('카드 컴포넌트를 찾을 수 없습니다. 스크립트 로드 순서를 확인하세요.');
+        return;
+    }
+    
     // 카드 생성 및 분석 시작
     const card = CardComponent.createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
     const container = document.getElementById('cardsContainer');
@@ -609,4 +615,4 @@ function deleteCard(cardId) {
     delete state.activeCards[cardId];
     
     console.log('카드 삭제 완료:', cardId);
-} 
+}

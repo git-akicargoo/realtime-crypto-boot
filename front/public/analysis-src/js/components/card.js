@@ -1108,12 +1108,24 @@ const CardComponent = (function() {
         const signalStrengthValue = card.querySelector('.signal-strength-value');
         const signalStrengthBar = card.querySelector('.signal-strength-bar');
         if (signalStrengthValue && signalStrengthBar) {
-            let strength = card.signalStrength || 0;
+            let strength = data.buySignalStrength !== undefined ? parseFloat(data.buySignalStrength) : (card.signalStrength || 0);
             
-            if (strength > 0) {
-                signalStrengthValue.textContent = strength + '%';
-                signalStrengthBar.style.width = strength + '%';
-                console.log(`[${cardId}] 신호 강도 업데이트: ${strength}%`);
+            console.log(`[${cardId}] 신호 강도 업데이트: ${strength}%`);
+            
+            if (strength > 0 || strength === 0) { // 0도 표시
+                signalStrengthValue.textContent = strength.toFixed(1) + '%';
+                signalStrengthBar.style.width = Math.min(strength, 100) + '%';
+                
+                // 신호 강도에 따른 색상 설정
+                if (strength >= 70) {
+                    signalStrengthBar.style.backgroundColor = 'var(--strong-buy-color, #00b894)';
+                } else if (strength >= 50) {
+                    signalStrengthBar.style.backgroundColor = 'var(--buy-color, #00cec9)';
+                } else if (strength >= 30) {
+                    signalStrengthBar.style.backgroundColor = 'var(--weak-buy-color, #74b9ff)';
+                } else {
+                    signalStrengthBar.style.backgroundColor = 'var(--neutral-color, #a0a0a0)';
+                }
             }
         }
         
@@ -1324,7 +1336,7 @@ const CardComponent = (function() {
         }
 
         const cardId = card.id;
-        console.log(`[${cardId}] 카드 UI 업데이트 시작`);
+        console.log(`[${cardId}] 카드 UI 업데이트 시작`, data);
 
         // 로딩 표시 숨기기
         const loadingIndicator = card.querySelector('.loading-indicator');
@@ -1342,7 +1354,8 @@ const CardComponent = (function() {
         // 가격 변화 업데이트
         const priceChange = card.querySelector('.price-change');
         if (priceChange && data.priceChangePercent !== undefined) {
-            const changeValue = data.priceChangePercent;
+            const changeValue = parseFloat(data.priceChangePercent);
+            // 값이 0이더라도 표시
             priceChange.textContent = FormatUtils.formatPercent(changeValue);
             priceChange.className = 'price-change ' + (changeValue > 0 ? 'positive' : changeValue < 0 ? 'negative' : 'neutral');
             console.log(`[${cardId}] 가격 변화 업데이트: ${changeValue}%`);
@@ -1356,6 +1369,26 @@ const CardComponent = (function() {
                 (data.analysisResult === 'BUY' || data.analysisResult === 'STRONG_BUY' ? 'positive' : 
                  data.analysisResult === 'SELL' || data.analysisResult === 'STRONG_SELL' ? 'negative' : 'neutral');
             console.log(`[${cardId}] 분석 결과 업데이트: ${data.analysisResult}`);
+        }
+
+        // 매수 신호 강도 업데이트 (signal-value 요소)
+        const signalValue = card.querySelector('.signal-value');
+        if (signalValue && data.buySignalStrength !== undefined) {
+            const buySignalStrength = parseFloat(data.buySignalStrength);
+            signalValue.textContent = buySignalStrength.toFixed(1) + '%';
+            
+            // 신호 강도에 따른 클래스 설정
+            let signalClass = 'neutral';
+            if (buySignalStrength >= 70) {
+                signalClass = 'strong-positive';
+            } else if (buySignalStrength >= 50) {
+                signalClass = 'positive';
+            } else if (buySignalStrength >= 30) {
+                signalClass = 'weak-positive';
+            }
+            
+            signalValue.className = 'signal-value ' + signalClass;
+            console.log(`[${cardId}] 매수 신호 강도 업데이트 (signal-value): ${buySignalStrength}%`);
         }
 
         // 신호 업데이트 (SMA, RSI, 볼린저 밴드 등)
@@ -1394,15 +1427,28 @@ const CardComponent = (function() {
         const signalStrengthValue = card.querySelector('.signal-strength-value');
         const signalStrengthBar = card.querySelector('.signal-strength-bar');
         if (signalStrengthValue && signalStrengthBar) {
-            let strength = data.buySignalStrength !== undefined ? data.buySignalStrength : (card.signalStrength || 0);
+            // buySignalStrength 값이 있으면 사용, 없으면 signalStrength 사용
+            let strength = data.buySignalStrength !== undefined ? parseFloat(data.buySignalStrength) : (card.signalStrength || 0);
             
-            if (strength > 0) {
+            console.log(`[${cardId}] 신호 강도 업데이트: ${strength}%`);
+            
+            if (strength > 0 || strength === 0) { // 0도 표시
                 signalStrengthValue.textContent = strength.toFixed(1) + '%';
-                signalStrengthBar.style.width = strength + '%';
-                console.log(`[${cardId}] 신호 강도 업데이트: ${strength}%`);
+                signalStrengthBar.style.width = Math.min(strength, 100) + '%';
+                
+                // 신호 강도에 따른 색상 설정
+                if (strength >= 70) {
+                    signalStrengthBar.style.backgroundColor = 'var(--strong-buy-color, #00b894)';
+                } else if (strength >= 50) {
+                    signalStrengthBar.style.backgroundColor = 'var(--buy-color, #00cec9)';
+                } else if (strength >= 30) {
+                    signalStrengthBar.style.backgroundColor = 'var(--weak-buy-color, #74b9ff)';
+                } else {
+                    signalStrengthBar.style.backgroundColor = 'var(--neutral-color, #a0a0a0)';
+                }
             }
         }
-
+        
         console.log(`[${cardId}] 카드 UI 업데이트 완료`);
     }
     
@@ -1411,6 +1457,7 @@ const CardComponent = (function() {
         if (!card || !data) return;
 
         const cardId = card.id;
+        console.log(`[${cardId}] 신호 업데이트 시작`, data);
         
         // SMA 신호 업데이트
         const smaSignal = card.querySelector('.sma-signal');
@@ -1418,36 +1465,41 @@ const CardComponent = (function() {
             const signalValue = data.smaSignal;
             smaSignal.textContent = signalValue;
             smaSignal.className = 'indicator-value sma-signal ' + 
-                (signalValue === 'BULLISH' || signalValue === 'MODERATELY_BULLISH' || signalValue === 'SLIGHTLY_BULLISH' ? 'positive' : 
-                 signalValue === 'BEARISH' || signalValue === 'MODERATELY_BEARISH' || signalValue === 'SLIGHTLY_BEARISH' ? 'negative' : 'neutral');
+                (signalValue === 'BULLISH' || signalValue === 'MODERATELY_BULLISH' || signalValue === 'SLIGHTLY_BULLISH' || signalValue === 'STRONG_UPTREND' ? 'positive' : 
+                 signalValue === 'BEARISH' || signalValue === 'MODERATELY_BEARISH' || signalValue === 'SLIGHTLY_BEARISH' || signalValue === 'STRONG_DOWNTREND' ? 'negative' : 'neutral');
             console.log(`[${cardId}] SMA 신호 업데이트: ${signalValue}`);
         }
         
         // RSI 값 업데이트
         const rsiValue = card.querySelector('.rsi-value');
         if (rsiValue && data.rsiValue !== undefined) {
-            rsiValue.textContent = data.rsiValue.toFixed(2);
+            const rsiVal = parseFloat(data.rsiValue);
+            rsiValue.textContent = rsiVal.toFixed(2);
             rsiValue.className = 'indicator-value rsi-value ' + 
                 (data.rsiSignal === 'OVERSOLD' ? 'positive' : 
                  data.rsiSignal === 'OVERBOUGHT' ? 'negative' : 'neutral');
-            console.log(`[${cardId}] RSI 값 업데이트: ${data.rsiValue}`);
+            console.log(`[${cardId}] RSI 값 업데이트: ${rsiVal}`);
         }
         
         // 거래량 변화 업데이트
         const volumeSignal = card.querySelector('.volume-signal');
         if (volumeSignal && data.volumeChangePercent !== undefined) {
-            volumeSignal.textContent = FormatUtils.formatPercent(data.volumeChangePercent);
+            const volumeChange = parseFloat(data.volumeChangePercent);
+            // 값이 0이더라도 표시
+            volumeSignal.textContent = FormatUtils.formatPercent(volumeChange);
             
             let volumeClass = 'neutral';
-            if (data.volumeChangePercent > 20) {
+            if (volumeChange > 20) {
                 volumeClass = 'positive';
-            } else if (data.volumeChangePercent < -20) {
+            } else if (volumeChange < -20) {
                 volumeClass = 'negative';
             }
             
             volumeSignal.className = 'indicator-value volume-signal ' + volumeClass;
-            console.log(`[${cardId}] 거래량 변화 업데이트: ${data.volumeChangePercent}%`);
+            console.log(`[${cardId}] 거래량 변화 업데이트: ${volumeChange}%`);
         }
+        
+        console.log(`[${cardId}] 신호 업데이트 완료`);
     }
     
     // 공개 API
