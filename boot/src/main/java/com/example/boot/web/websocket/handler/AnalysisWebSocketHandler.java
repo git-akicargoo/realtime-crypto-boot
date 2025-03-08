@@ -88,6 +88,8 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
                         .bollingerWidth(result.getBollingerWidth())
                         .analysisResult(result.getAnalysisResult())
                         .message(result.getMessage())
+                        .volumeChangePercent(result.getVolumeChangePercent())  // 이 부분만 추가
+                        .priceChangePercent(result.getPriceChangePercent())
                         .build();
                     
                     // 디버깅을 위한 로깅 추가
