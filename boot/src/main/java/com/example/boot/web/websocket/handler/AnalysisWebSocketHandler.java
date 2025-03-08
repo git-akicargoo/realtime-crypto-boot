@@ -103,6 +103,7 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
                     
                     // JSON 변환 및 전송
                     String json = objectMapper.writeValueAsString(response);
+                    log.info("JSON 변환 후 데이터 확인: {}", json);
                     session.sendMessage(new TextMessage(json));
                     
                 } catch (Exception e) {

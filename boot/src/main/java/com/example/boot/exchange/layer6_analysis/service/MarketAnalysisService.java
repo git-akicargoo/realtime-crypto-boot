@@ -252,8 +252,19 @@ public class MarketAnalysisService {
             smaResults, rsiResults, bollingerResults, volumeResults, tradingStyle);
         
         // 6. 과매수/과매도 상태 판단
+        log.info("분석에 사용되는 값들: rsiSignal={}, rsiValue={}, bollingerSignal={}, smaSignal={}", 
+            rsiResults.get("signal"), rsiResults.get("value"), 
+            bollingerResults.get("signal"), smaResults.get("signal"));
+
         Map<String, Object> marketCondition = determineMarketCondition(
-            rsiResults, bollingerResults, smaResults);
+            (String) rsiResults.get("signal"), 
+            (double) rsiResults.get("value"),
+            (String) bollingerResults.get("signal"), 
+            (String) smaResults.get("signal")
+        );
+
+        log.info("시장 상태 결정 결과: condition={}, strength={}", 
+            marketCondition.get("condition"), marketCondition.get("strength"));
         
         // 7. 가격 변화율 계산
         double priceChangePercent = calculatePriceChange(latest, sortedHistory.subList(0, sortedHistory.size() - 1));
@@ -282,7 +293,9 @@ public class MarketAnalysisService {
             .tradingStyle(tradingStyle)
             .buySignalStrength(buySignalStrength)
             .priceChangePercent(priceChangePercent)
-            .volumeChangePercent((double) volumeResults.get("changePercent"));
+            .volumeChangePercent((double) volumeResults.get("changePercent"))
+            .marketCondition((String) marketCondition.get("condition"))
+            .marketConditionStrength((double) marketCondition.get("strength"));
             
         // SMA 관련 필드
         if (smaResults.containsKey("shortDiff")) {
@@ -324,14 +337,6 @@ public class MarketAnalysisService {
         }
         if (bollingerResults.containsKey("width")) {
             builder.bollingerWidth((double) bollingerResults.get("width"));
-        }
-        
-        // 과매수/과매도 상태
-        if (marketCondition.containsKey("condition")) {
-            builder.marketCondition((String) marketCondition.get("condition"));
-        }
-        if (marketCondition.containsKey("strength")) {
-            builder.marketConditionStrength((double) marketCondition.get("strength"));
         }
         
         // 분석 결과 메시지
@@ -917,65 +922,74 @@ public class MarketAnalysisService {
     
     // 새로운 메서드: 과매수/과매도 상태 판단
     private Map<String, Object> determineMarketCondition(
-            Map<String, Object> rsiResults,
-            Map<String, Object> bollingerResults,
-            Map<String, Object> smaResults) {
+            String rsiSignal, double rsiValue,
+            String bollingerSignal, String smaSignal) {
         
         Map<String, Object> result = new HashMap<>();
+        String condition = "NEUTRAL";
+        double strength = 0.0;
         
-        try {
-            // RSI 신호
-            String rsiSignal = (String) rsiResults.getOrDefault("signal", "NEUTRAL");
-            double rsiValue = (double) rsiResults.getOrDefault("value", 50.0);
-            
-            // 볼린저 밴드 신호
-            String bollingerSignal = (String) bollingerResults.getOrDefault("signal", "INSIDE");
-            
-            // SMA 신호
-            String smaSignal = (String) smaResults.getOrDefault("signal", "NEUTRAL");
-            
-            // 과매수/과매도 상태 판단
-            String condition = "NEUTRAL";
-            double strength = 0.0;
-            
-            // RSI 기반 과매수/과매도 판단
-            if ("OVERBOUGHT".equals(rsiSignal)) {
+        // RSI 기반 판단 (기본 로직)
+        if ("OVERBOUGHT".equals(rsiSignal)) {
+            condition = "OVERBOUGHT";
+            strength = Math.min(100, (rsiValue - 70) * 3.33); // 70-100 범위를 0-100%로 변환
+        } else if ("OVERSOLD".equals(rsiSignal)) {
+            condition = "OVERSOLD";
+            strength = Math.min(100, (30 - rsiValue) * 3.33); // 0-30 범위를 0-100%로 변환
+        } else {
+            // 중립 상태에서도 RSI 값에 따라 약한 과매수/과매도 경향 판단
+            if (rsiValue > 55) { // 중립이지만 과매수 쪽으로 기울어짐
                 condition = "OVERBOUGHT";
-                strength = (rsiValue - 50) * 2; // 50-100 범위를 0-100% 강도로 변환
-            } else if ("OVERSOLD".equals(rsiSignal)) {
+                strength = (rsiValue - 55) * 6.67; // 55-70 범위를 0-100%로 매핑
+            } else if (rsiValue < 45) { // 중립이지만 과매도 쪽으로 기울어짐
                 condition = "OVERSOLD";
-                strength = (50 - rsiValue) * 2; // 0-50 범위를 0-100% 강도로 변환
+                strength = (45 - rsiValue) * 6.67; // 30-45 범위를 0-100%로 매핑
             }
-            
-            // 볼린저 밴드 신호로 보정
-            if ("UPPER_TOUCH".equals(bollingerSignal) && "OVERBOUGHT".equals(condition)) {
-                strength += 10; // 상단 돌파 시 과매수 강도 증가
-            } else if ("LOWER_TOUCH".equals(bollingerSignal) && "OVERSOLD".equals(condition)) {
-                strength += 10; // 하단 돌파 시 과매도 강도 증가
-            }
-            
-            // SMA 신호로 보정
-            if ("STRONG_UPTREND".equals(smaSignal) && "OVERBOUGHT".equals(condition)) {
-                strength += 5; // 강한 상승 추세 시 과매수 강도 증가
-            } else if ("STRONG_DOWNTREND".equals(smaSignal) && "OVERSOLD".equals(condition)) {
-                strength += 5; // 강한 하락 추세 시 과매도 강도 증가
-            }
-            
-            // 강도 제한 (0-100%)
-            strength = Math.min(100, Math.max(0, strength));
-            
-            // 결과 저장
-            result.put("condition", condition);
-            result.put("strength", strength);
-            
-            log.debug("시장 상태 판단 결과: condition={}, strength={}, rsiSignal={}, rsiValue={}, bollingerSignal={}, smaSignal={}",
-                condition, strength, rsiSignal, rsiValue, bollingerSignal, smaSignal);
-                
-        } catch (Exception e) {
-            log.error("시장 상태 판단 중 오류 발생: {}", e.getMessage(), e);
-            result.put("condition", "NEUTRAL");
-            result.put("strength", 50.0);
         }
+        
+        // 볼린저 밴드와 SMA 신호를 고려하여 강도 조정
+        if ("UPPER_BAND".equals(bollingerSignal) || "UPPER_HALF".equals(bollingerSignal)) {
+            if ("OVERBOUGHT".equals(condition)) {
+                strength += 10; // 과매수 신호 강화
+            } else if ("NEUTRAL".equals(condition)) {
+                condition = "OVERBOUGHT";
+                strength = 15;
+            }
+        } else if ("LOWER_BAND".equals(bollingerSignal) || "LOWER_HALF".equals(bollingerSignal)) {
+            if ("OVERSOLD".equals(condition)) {
+                strength += 10; // 과매도 신호 강화
+            } else if ("NEUTRAL".equals(condition)) {
+                condition = "OVERSOLD";
+                strength = 15;
+            }
+        }
+        
+        // SMA 트렌드 반영
+        if ("STRONG_UPTREND".equals(smaSignal) || "UPTREND".equals(smaSignal)) {
+            if ("OVERBOUGHT".equals(condition)) {
+                strength += 15; // 과매수 상태에서 상승 트렌드면 신호 강화
+            } else if ("NEUTRAL".equals(condition)) {
+                condition = "OVERBOUGHT";
+                strength = 20;
+            } else { // OVERSOLD
+                strength = Math.max(0, strength - 10); // 과매도 신호 약화
+            }
+        } else if ("STRONG_DOWNTREND".equals(smaSignal) || "DOWNTREND".equals(smaSignal)) {
+            if ("OVERSOLD".equals(condition)) {
+                strength += 15; // 과매도 상태에서 하락 트렌드면 신호 강화
+            } else if ("NEUTRAL".equals(condition)) {
+                condition = "OVERSOLD";
+                strength = 20;
+            } else { // OVERBOUGHT
+                strength = Math.max(0, strength - 10); // 과매수 신호 약화
+            }
+        }
+        
+        // 최대값 제한
+        strength = Math.min(100, strength);
+        
+        result.put("condition", condition);
+        result.put("strength", strength);
         
         return result;
     }
