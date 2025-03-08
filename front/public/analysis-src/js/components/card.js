@@ -368,60 +368,64 @@ const CardComponent = (function() {
         const thresholdButtons = card.querySelectorAll('.threshold-btn');
         thresholdButtons.forEach(button => {
             button.addEventListener('click', function() {
-                const value = parseInt(this.getAttribute('data-value'));
-                const oldValue = mockData.buySignalThreshold;
+                // 모의 거래 데이터 확인
+                if (!mockTradingData[cardId]) {
+                    console.error('모의 거래 데이터를 찾을 수 없음:', cardId);
+                    return;
+                }
                 
-                console.log('[디버깅] 매수 신호 기준값 변경:', oldValue, '->', value, '%');
-                
-                // 기준값 업데이트
-                mockData.buySignalThreshold = value;
-                
-                // 활성 버튼 표시 업데이트
-                thresholdButtons.forEach(btn => {
-                    btn.classList.remove('active');
-                });
+                // 모든 버튼에서 active 클래스 제거
+                thresholdButtons.forEach(btn => btn.classList.remove('active'));
+                // 클릭한 버튼에 active 클래스 추가
                 this.classList.add('active');
                 
-                // UI 업데이트
-                updateMockTradingUI(card);
+                const value = parseFloat(this.getAttribute('data-value'));
+                mockTradingData[cardId].buySignalThreshold = value;
+                console.log('매수 신호 강도 기준 변경:', value);
             });
         });
         
         // 익절 기준 입력 이벤트
-        const profitThresholdInput = card.querySelector('.profit-threshold');
+        const profitThresholdInput = card.querySelector('.profit-input');
+        const lossThresholdInput = card.querySelector('.loss-input');
+        
         if (profitThresholdInput) {
             profitThresholdInput.addEventListener('change', function() {
-                const value = parseFloat(this.value);
-                if (isNaN(value) || value < 0.1) {
-                    this.value = 0.1;
-                    mockData.profitThreshold = 0.1;
-                } else if (value > 20) {
-                    this.value = 20;
-                    mockData.profitThreshold = 20;
-                } else {
-                    mockData.profitThreshold = value;
+                // 모의 거래 데이터 확인
+                if (!mockTradingData[cardId]) {
+                    console.error('모의 거래 데이터를 찾을 수 없음:', cardId);
+                    return;
                 }
                 
-                console.log('[디버깅] 익절 기준 변경:', mockData.profitThreshold, '%');
+                const value = parseFloat(this.value);
+                if (!isNaN(value) && value >= 0.1) {
+                    mockTradingData[cardId].profitThreshold = value;
+                    console.log('익절 기준 변경:', value);
+                } else {
+                    // 유효하지 않은 값이면 기본값으로 복원
+                    this.value = mockTradingData[cardId].profitThreshold;
+                    alert('0.1 이상의 값을 입력해주세요.');
+                }
             });
         }
         
-        // 손절 기준 입력 이벤트
-        const lossThresholdInput = card.querySelector('.loss-threshold');
         if (lossThresholdInput) {
-            lossThresholdInput.addEventListener('change', function() {
-                const value = parseFloat(this.value);
-                if (isNaN(value) || value < 0.1) {
-                    this.value = 0.1;
-                    mockData.lossThreshold = 0.1;
-                } else if (value > 10) {
-                    this.value = 10;
-                    mockData.lossThreshold = 10;
-                } else {
-                    mockData.lossThreshold = value;
+            lossInput.addEventListener('change', function() {
+                // 모의 거래 데이터 확인
+                if (!mockTradingData[cardId]) {
+                    console.error('모의 거래 데이터를 찾을 수 없음:', cardId);
+                    return;
                 }
                 
-                console.log('[디버깅] 손절 기준 변경:', mockData.lossThreshold, '%');
+                const value = parseFloat(this.value);
+                if (!isNaN(value) && value >= 0.1) {
+                    mockTradingData[cardId].lossThreshold = value;
+                    console.log('손절 기준 변경:', value);
+                } else {
+                    // 유효하지 않은 값이면 기본값으로 복원
+                    this.value = mockTradingData[cardId].lossThreshold;
+                    alert('0.1 이상의 값을 입력해주세요.');
+                }
             });
         }
     }
@@ -1019,8 +1023,8 @@ const CardComponent = (function() {
         const mockData = getMockTradingData(card);
         
         // 현재 가격 업데이트
-        if (data.price) {
-            mockData.currentPrice = parseFloat(data.price);
+        if (data.currentPrice !== undefined) {
+            mockData.currentPrice = parseFloat(data.currentPrice);
         } else if (data.lastPrice) {
             mockData.currentPrice = parseFloat(data.lastPrice);
         } else if (data.currentPrice) {
@@ -1029,44 +1033,47 @@ const CardComponent = (function() {
         
         // 신호 강도 추출 및 업데이트
         if (data.buySignalStrength !== undefined) {
-            mockData.signalStrength = parseFloat(data.buySignalStrength);
-        } else if (data.signalStrength !== undefined) {
-            mockData.signalStrength = parseFloat(data.signalStrength);
-        } else if (data.message) {
-            // 메시지에서 매수 신호 강도 추출 시도
-            const buySignalMatch = data.message.match(/매수 신호 강도: (\d+\.?\d*)%/);
-            if (buySignalMatch && buySignalMatch[1]) {
-                mockData.signalStrength = parseFloat(buySignalMatch[1]);
-            }
+            mockData.signalStrength = data.buySignalStrength;
         }
         
         // 가격 셀 업데이트
-        const priceCell = card.querySelector('.price-cell');
-        if (priceCell && data.price) {
+        const priceCell = card.querySelector('.current-price');
+        if (priceCell && data.currentPrice !== undefined) {
             const currentPrice = priceCell.querySelector('.current-price');
             if (currentPrice) {
-                currentPrice.textContent = FormatUtils.formatNumber(data.price);
+                currentPrice.textContent = FormatUtils.formatPrice(data.currentPrice);
             }
         }
         
         // 결과 셀 업데이트
-        const resultCell = card.querySelector('.result-cell');
+        const resultCell = card.querySelector('.result-value');
         if (resultCell && data.analysisResult) {
             const resultValue = resultCell.querySelector('.result-value');
             if (resultValue) {
-                resultValue.textContent = getSignalText(data.analysisResult);
-                resultValue.className = 'result-value ' + getSignalClass(data.analysisResult);
+                resultValue.textContent = data.analysisResult;
+                resultValue.className = 'result-value ' + 
+                    (data.analysisResult === 'BUY' || data.analysisResult === 'STRONG_BUY' ? 'positive' : 
+                     data.analysisResult === 'SELL' || data.analysisResult === 'STRONG_SELL' ? 'negative' : 'neutral');
             }
         }
         
         // 신호 셀 업데이트
-        const signalCell = card.querySelector('.signal-cell');
-        if (signalCell && data.signal) {
-            const signalValue = signalCell.querySelector('.signal-value');
-            if (signalValue) {
-                signalValue.textContent = getSignalText(data.signal);
-                signalValue.className = 'signal-value ' + getSignalClass(data.signal);
+        const signalCell = card.querySelector('.signal-value');
+        if (signalCell && data.buySignalStrength !== undefined) {
+            const buySignalStrength = parseFloat(data.buySignalStrength);
+            signalCell.textContent = buySignalStrength.toFixed(1) + '%';
+            
+            // 신호 강도에 따른 클래스 설정
+            let signalClass = 'neutral';
+            if (buySignalStrength >= 70) {
+                signalClass = 'strong-positive';
+            } else if (buySignalStrength >= 50) {
+                signalClass = 'positive';
+            } else if (buySignalStrength >= 30) {
+                signalClass = 'weak-positive';
             }
+            
+            signalCell.className = 'signal-value ' + signalClass;
         }
         
         // 지표 셀 업데이트
@@ -1084,24 +1091,24 @@ const CardComponent = (function() {
         if (marketCell && data.marketCondition) {
             const marketValue = marketCell.querySelector('.market-value');
             if (marketValue) {
-                marketValue.textContent = getMarketConditionText(data.marketCondition);
+                marketValue.textContent = translateMarketCondition(data.marketCondition);
             }
         }
         
         // 메시지 셀 업데이트
-        const messageCell = card.querySelector('.message-cell');
+        const messageCell = card.querySelector('.analysis-message');
         if (messageCell && data.message) {
-            const analysisMessage = messageCell.querySelector('.analysis-message');
-            if (analysisMessage) {
-                analysisMessage.textContent = data.message;
-            }
+            messageCell.textContent = data.message;
         }
         
         // 볼린저 밴드 신호 업데이트
-        const bollingerSignal = card.querySelector('.bollinger-signal');
-        if (bollingerSignal && data.bollingerBandsSignal) {
-            bollingerSignal.textContent = getBollingerText(data.bollingerBandsSignal);
-            bollingerSignal.className = 'bollinger-signal ' + getBollingerClass(data.bollingerBandsSignal);
+        const bbSignal = card.querySelector('.bb-signal');
+        if (bbSignal && data.bollingerSignal) {
+            const signalValue = data.bollingerSignal;
+            bbSignal.textContent = signalValue;
+            bbSignal.className = 'indicator-value bb-signal ' + 
+                (signalValue === 'LOWER_TOUCH' ? 'positive' : 
+                 signalValue === 'UPPER_TOUCH' ? 'negative' : 'neutral');
         }
         
         // 신호 강도 업데이트
@@ -1290,41 +1297,40 @@ const CardComponent = (function() {
         return 0;
     }
     
-    // 웹소켓 메시지 처리 함수
-    function processWebSocketMessage(card, data) {
-        // 유효성 검사
-        if (!card || !data) {
-            console.error('유효하지 않은 카드 또는 데이터:', card, data);
+    // 웹소켓 메시지 처리 함수 - 데이터 구조 문제 해결
+    function processWebSocketMessage(card, message) {
+        if (!card || !message) {
+            console.error('유효하지 않은 카드 또는 메시지:', card, message);
             return;
         }
 
         const cardId = card.id;
         console.log(`[${cardId}] WebSocket 메시지 처리 시작`);
-        console.log(`[${cardId}] 수신된 데이터:`, data);
+        
+        // 중요: 메시지에서 실제 데이터 추출
+        let data = message;
+        if (message.type === 'analysis' && message.data) {
+            data = message.data;  // 여기가 핵심! message.data를 사용해야 함
+            console.log(`[${cardId}] 분석 데이터 추출 성공`);
+        }
+        
+        console.log(`[${cardId}] 처리할 데이터:`, data);
 
         // 현재 가격 업데이트
         if (data.currentPrice !== undefined) {
             console.log(`[${cardId}] 현재 가격 업데이트: ${data.currentPrice}`);
-            // 카드 객체에 현재 가격 저장
             card.currentPrice = data.currentPrice;
         }
 
-        // 신호 강도 직접 사용
+        // 신호 강도 저장
         if (data.buySignalStrength !== undefined) {
             console.log(`[${cardId}] 매수 신호 강도 업데이트: ${data.buySignalStrength}%`);
-            // 카드 객체에 신호 강도 저장
             card.signalStrength = data.buySignalStrength;
         }
 
-        // 자동 거래가 활성화되어 있지 않은 경우 UI 업데이트
-        if (!card.autoTrading) {
-            // UI 업데이트 함수 호출
-            updateCardUI(card, data);
-        } else {
-            // 자동 거래 로직 처리
-            processAutoTrading(card, data);
-        }
-
+        // 기존 UI 업데이트 함수 호출 - 추출된 데이터로!
+        updateCardUI(card, data);
+        
         console.log(`[${cardId}] WebSocket 메시지 처리 완료`);
     }
     
@@ -1398,7 +1404,7 @@ const CardComponent = (function() {
         const marketCondition = card.querySelector('.market-condition');
         if (marketCondition && data.marketCondition) {
             const condition = data.marketCondition;
-            marketCondition.textContent = condition;
+            marketCondition.textContent = translateMarketCondition(condition);
             marketCondition.className = 'market-condition ' + 
                 (condition === 'OVERBOUGHT' ? 'negative' : 
                  condition === 'OVERSOLD' ? 'positive' : 'neutral');
@@ -1481,6 +1487,17 @@ const CardComponent = (function() {
             console.log(`[${cardId}] RSI 값 업데이트: ${rsiVal}`);
         }
         
+        // 볼린저 밴드 신호 업데이트
+        const bbSignal = card.querySelector('.bb-signal');
+        if (bbSignal && data.bollingerSignal) {
+            const signalValue = data.bollingerSignal;
+            bbSignal.textContent = signalValue;
+            bbSignal.className = 'indicator-value bb-signal ' + 
+                (signalValue === 'LOWER_TOUCH' ? 'positive' : 
+                 signalValue === 'UPPER_TOUCH' ? 'negative' : 'neutral');
+            console.log(`[${cardId}] 볼린저 밴드 신호 업데이트: ${signalValue}`);
+        }
+        
         // 거래량 변화 업데이트
         const volumeSignal = card.querySelector('.volume-signal');
         if (volumeSignal && data.volumeChangePercent !== undefined) {
@@ -1500,6 +1517,18 @@ const CardComponent = (function() {
         }
         
         console.log(`[${cardId}] 신호 업데이트 완료`);
+    }
+    
+    // 시장 상태 번역
+    function translateMarketCondition(signal) {
+        switch(signal) {
+            case 'OVERBOUGHT':
+                return '과매수';
+            case 'OVERSOLD':
+                return '과매도';
+            default:
+                return signal;
+        }
     }
     
     // 공개 API
