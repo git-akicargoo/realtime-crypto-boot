@@ -15,6 +15,14 @@ spring:
   redis:
     host: localhost
     port: 6379
+  # JPA 공통 설정 추가
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
 
 zookeeper:
   connect-string: localhost:2181
@@ -93,6 +101,9 @@ logging:
     org.apache.zookeeper: ERROR    # Zookeeper 로깅
     org.apache.curator: ERROR      # Curator 로깅
     org.springframework: WARN
+    # JPA SQL 로깅 추가
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
 # CORS 설정
 cors:
@@ -104,6 +115,19 @@ spring:
   config:
     activate:
       on-profile: local
+  # H2 데이터베이스 설정
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    
 cors:
   allowed-origins: http://localhost:5173
 
@@ -121,6 +145,15 @@ spring:
   redis:
     host: redis    # localhost가 아닌 redis 컨테이너 이름
     port: 6379
+  # MySQL 설정 (Docker)
+  datasource:
+    url: jdbc:mysql://mysql:3306/exchange?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+    username: root
+    password: 1111
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+
 cors:
   allowed-origins: http://localhost:5173  # Docker 환경의 프론트엔드 주소
 
@@ -133,6 +166,17 @@ spring:
   config:
     activate:
       on-profile: prod
+  # MySQL 설정 (Production)
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}?useSSL=true&serverTimezone=UTC&characterEncoding=UTF-8
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: validate  # 운영 환경에서는 validate만 사용
+
 cors:
   allowed-origins: ${FRONTEND_URL}  # 운영 환경의 프론트엔드 주소는 환경변수로 주입
   kafka:

@@ -13,6 +13,26 @@ services:
     networks:
       - exchange-network
 
+  mysql:
+    image: mysql:8.0
+    container_name: exchange-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 1111
+      MYSQL_DATABASE: exchange
+      MYSQL_USER: aki
+      MYSQL_PASSWORD: 1111
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - exchange-network
+
   backend:
     build:
       context: ./boot
@@ -22,6 +42,8 @@ services:
     ports:
       - "8080"
     depends_on:
+      mysql:
+        condition: service_healthy
       kafka:
         condition: service_healthy
       zookeeper:
@@ -94,6 +116,10 @@ services:
       - kafka
     networks:
       - exchange-network
+
+volumes:
+  mysql-data:
+    driver: local
 
 networks:
   exchange-network:
