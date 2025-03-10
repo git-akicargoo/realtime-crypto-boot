@@ -287,9 +287,15 @@ function setupEventListeners() {
             const currencyPair = `${quoteCurrency}-${symbol}`;
             const displayPair = `${symbol}/${quoteCurrency}`;
             
-            // 이미 동일한 분석이 진행 중인지 확인
-            const baseId = `${exchange}-${currencyPair}`.toLowerCase();
-            if (state.activeCards[baseId]) {
+            // 기본 ID 생성 (거래소-화폐쌍 형식)
+            const baseId = `${exchange}-${quoteCurrency}-${symbol}`.toLowerCase();
+            
+            // 이미 동일한 분석이 진행 중인지 확인 (baseId로 확인)
+            const isAlreadyActive = Object.values(state.activeCards).some(cardInfo => 
+                cardInfo.baseId === baseId
+            );
+            
+            if (isAlreadyActive) {
                 showAlert('이미 동일한 거래쌍의 분석이 진행 중입니다.');
                 return;
             }
@@ -297,12 +303,14 @@ function setupEventListeners() {
             // 카드 생성
             const card = CardComponent.createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
             
-            // 카드 정보 저장
-            state.activeCards[baseId] = {
+            // 카드 정보 저장 (임시 ID로 저장)
+            state.activeCards[card.id] = {
                 exchange: exchange,
                 currencyPair: currencyPair,
-                element: card,
-                cardId: card.id
+                symbol: symbol,
+                quoteCurrency: quoteCurrency,
+                baseId: baseId,
+                card: card
             };
             
             console.log('카드 생성 완료, ID:', card.id);
@@ -609,20 +617,32 @@ function showCustomAlert(message) {
 
 // 카드 삭제 함수
 function deleteCard(cardId) {
-    // 카드 정보 확인
+    console.log('카드 삭제 요청:', cardId);
+    
+    // 카드 정보 가져오기
     const cardInfo = state.activeCards[cardId];
     if (!cardInfo) {
         console.error('삭제할 카드 정보를 찾을 수 없음:', cardId);
         return;
     }
     
-    // 카드 요소 제거
-    const card = cardInfo.element;
-    if (card && card.parentNode) {
-        card.parentNode.removeChild(card);
+    const card = cardInfo.card;
+    if (!card) {
+        console.error('삭제할 카드 요소를 찾을 수 없음:', cardId);
+        delete state.activeCards[cardId];
+        return;
     }
     
-    // 상태에서 카드 제거
+    // 웹소켓 연결 종료
+    WebSocketService.stopAnalysis(cardId);
+    
+    // 카드 요소 제거
+    const cardsContainer = document.getElementById('cardsContainer');
+    if (cardsContainer && card.parentElement === cardsContainer) {
+        cardsContainer.removeChild(card);
+    }
+    
+    // 상태에서 제거
     delete state.activeCards[cardId];
     
     console.log('카드 삭제 완료:', cardId);

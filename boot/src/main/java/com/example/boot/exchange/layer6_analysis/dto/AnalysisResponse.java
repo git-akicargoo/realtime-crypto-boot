@@ -59,6 +59,7 @@ public class AnalysisResponse {
     private String cardId;
     private String shortId;
     private String createdAt;
+    private long timestamp;  // 타임스탬프 (밀리초)
 
     public Double getSmaShortDifference() {
         return this.sma1Difference;

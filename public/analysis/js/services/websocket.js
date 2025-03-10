@@ -5,48 +5,32 @@ const WebSocketService = (function() {
     
     // 분석 시작
     function startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card) {
-        console.log('분석 시작:', exchange, currencyPair);
+        console.log('분석 시작 요청:', exchange, currencyPair);
         
-        const connectionId = `${exchange}-${currencyPair}`.toLowerCase();
-        
-        // 이미 웹소켓 연결이 있는지 확인
-        if (activeConnections[connectionId]) {
-            console.log('이미 웹소켓 연결이 있습니다.');
-            return;
-        }
-        
-        // 로딩 표시 시작
+        // 로딩 표시
         const loadingIndicator = card.querySelector('.loading-indicator');
         if (loadingIndicator) {
             loadingIndicator.style.display = 'flex';
         }
         
-        // 시작 버튼 숨기고 중지 버튼 표시
-        const startButton = card.querySelector('.start-button');
-        const stopButton = card.querySelector('.stop-button');
-        if (startButton && stopButton) {
-            startButton.style.display = 'none';
-            stopButton.style.display = 'inline-block';
-        }
-        
-        // 웹소켓 URL 설정 - 환경에 따라 조정
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsHost = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
-        const wsUrl = `${wsProtocol}//${wsHost}/ws/analysis`;
-        
         // 웹소켓 연결
-        const ws = new WebSocket(wsUrl);
-        activeConnections[connectionId] = ws;
+        const ws = new WebSocket(`ws://${window.location.hostname}:8080/ws/analysis`);
+        
+        // 연결 저장 (카드 객체를 키로 사용)
+        const connectionKey = card;
+        activeConnections[connectionKey] = ws;
         
         ws.onopen = function() {
-            console.log('웹소켓 연결됨:', wsUrl);
+            console.log('웹소켓 연결 성공');
             
             // 분석 요청 전송
             const request = {
-                exchange,
-                currencyPair,
-                symbol,
-                quoteCurrency
+                action: 'startAnalysis',
+                exchange: exchange,
+                currencyPair: currencyPair,
+                symbol: symbol,
+                quoteCurrency: quoteCurrency,
+                tradingStyle: 'dayTrading'  // 기본값
             };
             
             console.log('분석 요청 전송:', request);
@@ -60,12 +44,38 @@ const WebSocketService = (function() {
                 
                 // 에러 체크
                 if (data.error) {
-                    console.error('백엔드 에러:', data.error, data.details);
+                    console.error('백엔드 에러:', data.error);
                     CardComponent.showError(card, `분석 중 오류: ${data.error}`);
                     
                     // 연결 정리
-                    closeConnection(connectionId);
+                    closeConnection(connectionKey);
                     return;
+                }
+                
+                // 백엔드에서 생성된 카드 ID와 타임스탬프 사용
+                const cardId = data.cardId;
+                const timestamp = data.timestamp;
+                
+                // 상세 로그 추가: 백엔드에서 받은 카드 ID
+                console.log('백엔드에서 받은 원본 카드 ID:', cardId);
+                console.log('백엔드에서 받은 타임스탬프:', timestamp);
+                
+                // 카드 ID 설정
+                if (cardId && !card.id) {
+                    // 카드 ID 설정
+                    card.id = cardId;
+                    
+                    // 카드 ID 업데이트 이벤트 발생
+                    card.dispatchEvent(new CustomEvent('cardIdUpdated', {
+                        detail: { cardId: cardId, timestamp: timestamp }
+                    }));
+                    
+                    console.log('카드 ID 설정:', cardId);
+                    
+                    // 연결 맵 업데이트
+                    activeConnections[cardId] = ws;
+                    delete activeConnections[connectionKey];
+                    connectionKey = cardId;
                 }
                 
                 // 데이터 처리 및 카드 업데이트
@@ -81,7 +91,7 @@ const WebSocketService = (function() {
                 CardComponent.showError(card, '데이터 처리 중 오류가 발생했습니다.');
                 
                 // 연결 정리
-                closeConnection(connectionId);
+                closeConnection(connectionKey);
             }
         };
         
@@ -90,14 +100,14 @@ const WebSocketService = (function() {
             CardComponent.showError(card, '서버 연결 중 오류가 발생했습니다.');
             
             // 연결 정리
-            closeConnection(connectionId);
+            closeConnection(connectionKey);
         };
         
         ws.onclose = function() {
-            console.log('웹소켓 연결 종료:', connectionId);
+            console.log('웹소켓 연결 종료');
             
             // 연결 정리
-            delete activeConnections[connectionId];
+            delete activeConnections[connectionKey];
             
             // 버튼 상태 복원 (이미 에러 처리되지 않은 경우에만)
             const retryButton = card.querySelector('.retry-button');
@@ -115,10 +125,12 @@ const WebSocketService = (function() {
     
     // 분석 중지
     function stopAnalysis(exchange, currencyPair, symbol, quoteCurrency, card) {
-        const connectionId = `${exchange}-${currencyPair}`.toLowerCase();
-        
         // 웹소켓 연결 확인 및 종료
-        closeConnection(connectionId);
+        if (card && card.id) {
+            closeConnection(card.id);
+        } else {
+            closeConnection(card);
+        }
         
         // 버튼 상태 복원
         const startButton = card.querySelector('.start-button');
@@ -129,16 +141,16 @@ const WebSocketService = (function() {
             stopButton.style.display = 'none';
         }
         
-        console.log('분석 중지:', connectionId);
+        console.log('분석 중지');
     }
     
     // 웹소켓 연결 종료
-    function closeConnection(connectionId) {
-        if (activeConnections[connectionId]) {
-            if (activeConnections[connectionId].readyState === WebSocket.OPEN) {
-                activeConnections[connectionId].close();
+    function closeConnection(connectionKey) {
+        if (activeConnections[connectionKey]) {
+            if (activeConnections[connectionKey].readyState === WebSocket.OPEN) {
+                activeConnections[connectionKey].close();
             }
-            delete activeConnections[connectionId];
+            delete activeConnections[connectionKey];
         }
     }
     

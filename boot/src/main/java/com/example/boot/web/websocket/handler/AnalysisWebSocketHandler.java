@@ -46,18 +46,37 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
             if ("startAnalysis".equals(action)) {
                 // 인프라 상태 확인
                 var status = infraStatus.getStatus();
-                if (!status.isValid()) {
+        if (!status.isValid()) {
                     sendErrorMessage(session, "Trading infrastructure is not ready. Please try again later.");
-                    return;
-                }
+                return;
+            }
                 
                 // 분석 시작
                 log.info("Starting analysis for {}-{}, style: {}", 
                          request.getExchange(), request.getCurrencyPair(), request.getTradingStyle());
                 
-                // 기존 분석 저장
-                activeAnalysis.put(session, request);
+                // 카드 ID 생성 (백엔드에서 생성)
+                String baseCardId = (request.getExchange() + "-" + request.getCurrencyPair()).toLowerCase();
+                // UUID 생성 (8자리 랜덤 문자열)
+                String uuid = Long.toHexString(Double.doubleToLongBits(Math.random())).substring(0, 8);
+                // 최종 카드 ID 생성 (baseCardId-uuid)
+                String cardId = baseCardId + "-" + uuid;
+                // 타임스탬프 생성 (백엔드에서 생성)
+                long timestamp = System.currentTimeMillis();
                 
+                // 상세 로그 추가: 카드 ID 생성 정보
+                log.info("백엔드에서 생성된 기본 카드 ID: {}", baseCardId);
+                log.info("백엔드에서 생성된 UUID: {}", uuid);
+                log.info("백엔드에서 생성된 최종 카드 ID: {}", cardId);
+                log.info("백엔드에서 생성된 타임스탬프: {}", timestamp);
+                
+                // 요청 객체에 카드 ID와 타임스탬프 설정
+                request.setCardId(cardId);
+                request.setTimestamp(timestamp);
+                
+                // 기존 분석 저장
+        activeAnalysis.put(session, request);
+
                 // 분석 시작 및 응답 구독
                 Flux<AnalysisResponse> flux = marketAnalysisService.startRealtimeAnalysis(request);
                 
@@ -95,40 +114,44 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
                                 .volumeSignalStrength(response.getVolumeSignalStrength())
                                 .marketCondition(response.getMarketCondition())
                                 .marketConditionStrength(response.getMarketConditionStrength())
-                                // 카드 정보 추가
-                                .cardId(request.getCardId())
-                                .shortId(request.getShortId())
-                                .createdAt(request.getCreatedAt())
+                                // 카드 ID와 타임스탬프 추가
+                                .cardId(cardId)
+                                .timestamp(timestamp)
                                 .build();
                             
                             // 응답 전송
-                            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(responseWithCardInfo)));
+                            String responseJson = objectMapper.writeValueAsString(responseWithCardInfo);
+                            
+                            // 상세 로그 추가: 프론트엔드로 전송되는 응답 데이터
+                            log.info("프론트엔드로 전송되는 응답 카드 ID: {}", responseWithCardInfo.getCardId());
+                            log.info("프론트엔드로 전송되는 응답 타임스탬프: {}", responseWithCardInfo.getTimestamp());
+                            
+                            session.sendMessage(new TextMessage(responseJson));
                         } catch (Exception e) {
-                            log.error("Error sending analysis response: ", e);
+                            log.error("Error sending analysis response", e);
                         }
                     },
                     error -> {
-                        log.error("Error in analysis flux: ", error);
-                        try {
-                            Map<String, Object> errorResponse = new HashMap<>();
-                            errorResponse.put("error", "Analysis error: " + error.getMessage());
-                            // 에러 응답에도 카드 ID 포함
-                            errorResponse.put("cardId", request.getCardId());
-                            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
-                        } catch (Exception e) {
-                            log.error("Error sending error response: ", e);
-                        }
+                        log.error("Error in analysis stream", error);
+                        sendErrorMessage(session, "Analysis error: " + error.getMessage());
+                        stopRealtimeAnalysis(session);
+                    },
+                    () -> {
+                        log.info("Analysis stream completed for session: {}", session.getId());
+                        stopRealtimeAnalysis(session);
                     }
                 );
                 
                 // 구독 저장
                 subscriptions.put(session, subscription);
             } else if ("stopAnalysis".equals(action)) {
+                // 분석 중지
                 stopRealtimeAnalysis(session);
+                log.info("Analysis stopped for session: {}", session.getId());
             }
         } catch (Exception e) {
-            log.error("Error processing message: ", e);
-            sendErrorMessage(session, "Failed to process your request: " + e.getMessage());
+            log.error("Error handling WebSocket message", e);
+            sendErrorMessage(session, "Error processing request: " + e.getMessage());
         }
     }
 

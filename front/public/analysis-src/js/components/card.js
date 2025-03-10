@@ -188,17 +188,14 @@ const CardComponent = (function() {
             loadingIndicator.style.display = 'flex';
         }
         
-        // 웹소켓 연결 시작
-        const request = {
-            action: 'startAnalysis',
-            exchange: exchange,
-            currencyPair: currencyPair,
-            symbol: symbol,
-            quoteCurrency: quoteCurrency
-        };
+        // 웹소켓 서비스를 통해 분석 시작
+        WebSocketService.startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card);
         
-        console.log('웹소켓 요청 전송:', request);
-        window.WebSocketService.send(request);
+        // 메시지 콜백 등록 (중요: 카드 ID가 변경되더라도 업데이트 가능하도록)
+        WebSocketService.onMessage(card.id, function(data) {
+            console.log(`[${card.id}] 메시지 콜백 실행:`, data);
+            updateCard(card, data);
+        });
     }
     
     // 분석 중지 함수
@@ -266,7 +263,7 @@ const CardComponent = (function() {
     
     // 카드 업데이트 함수
     function updateCard(card, data) {
-        console.log(`카드 업데이트 시작 (ID: ${card.id})`, data);
+        console.log(`[${card.id}] 카드 업데이트 데이터:`, data);
         
         try {
             // 로딩 표시 숨기기
@@ -275,15 +272,45 @@ const CardComponent = (function() {
                 loadingIndicator.style.display = 'none';
             }
             
-            // 카드 ID 및 데이터 확인
-            const cardId = card.id;
-            console.log(`[${cardId}] 카드 업데이트 데이터:`, data);
+            // 백엔드에서 받은 카드 ID 확인 및 업데이트
+            if (data.cardId && data.cardId !== card.id) {
+                console.log(`카드 ID 업데이트: ${card.id} -> ${data.cardId}`);
+                
+                // 카드 ID 업데이트
+                const oldId = card.id;
+                card.id = data.cardId;
+                
+                // ID 표시 업데이트
+                const cardIdDisplay = card.querySelector('.card-id-display');
+                if (cardIdDisplay) {
+                    cardIdDisplay.textContent = `ID: ${data.cardId}`;
+                }
+                
+                // 상태 객체 업데이트 (window.state.activeCards)
+                if (window.state && window.state.activeCards) {
+                    if (window.state.activeCards[oldId]) {
+                        window.state.activeCards[data.cardId] = window.state.activeCards[oldId];
+                        window.state.activeCards[data.cardId].card = card;
+                        delete window.state.activeCards[oldId];
+                        console.log(`상태 객체 업데이트 완료: ${oldId} -> ${data.cardId}`);
+                    }
+                }
+                
+                // 메시지 콜백 재등록 (ID 변경 후에도 콜백이 작동하도록)
+                if (window.WebSocketService && window.WebSocketService.onMessage) {
+                    window.WebSocketService.onMessage(data.cardId, function(newData) {
+                        console.log(`[${data.cardId}] 새 메시지 콜백 실행:`, newData);
+                        updateCard(card, newData);
+                    });
+                }
+            }
             
             // 여기서 실제 UI 업데이트 로직 실행
             updateCardUI(card, data);
             
         } catch (error) {
-            console.error(`카드 업데이트 중 오류 (ID: ${card.id}):`, error);
+            console.error(`[${card.id}] 카드 업데이트 중 오류:`, error);
+            showError(card, '데이터 처리 중 오류가 발생했습니다.');
         }
     }
     
@@ -305,7 +332,7 @@ const CardComponent = (function() {
                 console.log('cardId로 카드 찾음:', data.cardId);
                 updateCard(card, data);
                 return;
-            } else {
+                } else {
                 console.warn('cardId에 해당하는 카드를 찾을 수 없음:', data.cardId);
             }
         }
@@ -326,7 +353,7 @@ const CardComponent = (function() {
         if (card) {
             console.log('baseId로 카드 찾음:', baseId);
             updateCard(card, data);
-        } else {
+                } else {
             console.warn(`카드를 찾을 수 없음: ${baseId}`, data);
         }
     }
@@ -532,7 +559,7 @@ const CardComponent = (function() {
         processWebSocketMessage,
         updateCardUI
     };
-})();
+})(); 
 
 // 전역 객체에 CardComponent 할당
 window.CardComponent = CardComponent; 

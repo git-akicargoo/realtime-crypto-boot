@@ -6,7 +6,6 @@ const CardComponent = (function() {
         
         const card = document.createElement('div');
         card.className = 'analysis-card';
-        card.id = `${exchange}-${currencyPair}`.toLowerCase();
         
         // 카드 내용 설정
         card.innerHTML = `
@@ -24,6 +23,10 @@ const CardComponent = (function() {
                 <span>분석 데이터 로딩 중...</span>
             </div>
             <div class="card-content">
+                <div class="card-info">
+                    <div class="card-creation-time">생성: 대기중...</div>
+                    <div class="card-id">ID: 대기중...</div>
+                </div>
                 <div class="price-section">
                     <div class="current-price">-</div>
                     <div class="price-change neutral">-</div>
@@ -117,15 +120,17 @@ const CardComponent = (function() {
         }
         
         // 상태에서 제거
-        const cardId = `${exchange}-${currencyPair}`.toLowerCase();
         if (window.state && window.state.activeCards) {
-            delete window.state.activeCards[cardId];
+            // 카드 ID 사용 (card.id 사용)
+            if (card && card.id) {
+                delete window.state.activeCards[card.id];
+            }
         }
     }
     
     // 카드 데이터 업데이트
     function updateCard(card, data) {
-        console.log('카드 업데이트 시작 - 데이터:', data);
+        console.log('[' + card.id + '] 카드 업데이트 데이터:', data);
         
         try {
             // 로딩 표시 숨기기
@@ -145,6 +150,9 @@ const CardComponent = (function() {
                 if (retryButton) retryButton.style.display = 'none';
             }
             
+            // 카드 ID와 생성 시간 업데이트
+            updateCardInfo(card, data);
+            
             // 가격 정보 업데이트
             updatePriceInfo(card, data);
             
@@ -163,6 +171,30 @@ const CardComponent = (function() {
             console.log('카드 업데이트 완료');
         } catch (error) {
             console.error('카드 업데이트 중 오류:', error);
+        }
+    }
+    
+    // 카드 정보 업데이트 (ID, 생성 시간)
+    function updateCardInfo(card, data) {
+        // 카드 ID 표시
+        const cardIdElement = card.querySelector('.card-id');
+        if (cardIdElement && data.cardId) {
+            cardIdElement.textContent = `ID: ${data.cardId}`;
+        }
+        
+        // 생성 시간 표시
+        const creationTimeElement = card.querySelector('.card-creation-time');
+        if (creationTimeElement && data.timestamp) {
+            const date = new Date(data.timestamp);
+            const formattedDate = date.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            creationTimeElement.textContent = `생성: ${formattedDate}`;
         }
     }
     

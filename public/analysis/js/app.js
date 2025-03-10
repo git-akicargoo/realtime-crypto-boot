@@ -137,13 +137,11 @@ function startNewAnalysis() {
     // currencyPair 생성 (거래소별 형식이 다를 수 있음)
     const currencyPair = `${quoteCurrency}-${symbol}`;
     const displayPair = `${symbol}/${quoteCurrency}`;
-    const cardId = `${exchange}-${currencyPair}`.toLowerCase();
     
-    // 이미 같은 분석이 있는지 확인
-    if (state.activeCards[cardId]) {
-        alert('이미 같은 분석이 추가되어 있습니다.');
-        return;
-    }
+    // 상세 로그 추가
+    console.log('거래소:', exchange);
+    console.log('통화쌍:', currencyPair);
+    console.log('표시 통화쌍:', displayPair);
     
     // 카드 생성 및 분석 시작
     const card = CardComponent.createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
@@ -151,14 +149,27 @@ function startNewAnalysis() {
     if (container) {
         container.appendChild(card);
         
-        // 분석 시작
+        // 분석 시작 (백엔드에서 카드 ID와 타임스탬프를 받아옴)
         WebSocketService.startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card);
         
-        // 활성 카드 목록에 추가
-        state.activeCards[cardId] = {
+        // 활성 카드 목록에 추가 (카드 객체를 키로 사용)
+        state.activeCards[card] = {
             element: card,
             params: { exchange, currencyPair, symbol, quoteCurrency }
         };
+        
+        // 카드 ID가 업데이트되면 state.activeCards도 업데이트하기 위한 이벤트 리스너 추가
+        card.addEventListener('cardIdUpdated', function(e) {
+            const newCardId = e.detail.cardId;
+            console.log('카드 ID 업데이트 이벤트 수신:', newCardId);
+            
+            if (newCardId) {
+                // 새 ID로 상태 업데이트
+                state.activeCards[newCardId] = state.activeCards[card];
+                delete state.activeCards[card];
+                console.log('카드 상태 업데이트:', newCardId);
+            }
+        });
     }
     
     // 선택 초기화

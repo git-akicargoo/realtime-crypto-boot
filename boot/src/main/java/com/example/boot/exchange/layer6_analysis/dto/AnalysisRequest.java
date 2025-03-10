@@ -21,6 +21,7 @@ public class AnalysisRequest {
     private String cardId;           // 카드 ID
     private String shortId;          // 짧은 ID
     private String createdAt;        // 생성 시간
+    private long timestamp;          // 타임스탬프 (밀리초)
     
     private double priceDropThreshold = 3.0;
     private double volumeIncreaseThreshold = 10.0;
