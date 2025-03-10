@@ -235,4 +235,22 @@
   .analysis-cards-container {
     display: block;
   }
+}
+
+/* 카드 서브헤더 스타일 */
+.card-subheader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 15px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.card-created-time, .card-id-display {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 } 

@@ -14,7 +14,6 @@ import com.example.boot.exchange.layer6_analysis.dto.AnalysisRequest;
 import com.example.boot.exchange.layer6_analysis.dto.AnalysisResponse;
 import com.example.boot.exchange.layer6_analysis.service.MarketAnalysisService;
 import com.example.boot.web.controller.InfrastructureStatusController;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -38,93 +37,99 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        JsonNode jsonNode = objectMapper.readTree(message.getPayload());
-        String command = jsonNode.get("command").asText();
-        JsonNode data = jsonNode.get("data");
-
-        if ("start".equals(command)) {
-            AnalysisRequest request = objectMapper.treeToValue(data, AnalysisRequest.class);
-            startRealtimeAnalysis(session, request);
-        } else if ("stop".equals(command)) {
-            stopRealtimeAnalysis(session);
-        }
-    }
-
-    private void startRealtimeAnalysis(WebSocketSession session, AnalysisRequest request) {
-        log.info("Starting real-time analysis for {} - {}", request.getExchange(), request.getCurrencyPair());
-        
-        // tradingStyle이 null인 경우 기본값 설정
-        if (request.getTradingStyle() == null) {
-            request.setTradingStyle("DAY_TRADING");
-            log.info("Trading style was null, setting default to DAY_TRADING");
-        }
-        
-        // 분석 서비스 호출
-        Flux<AnalysisResponse> analysisFlux = marketAnalysisService.startRealtimeAnalysis(request);
-        
-        // 구독 및 결과 전송
-        Disposable subscription = analysisFlux.subscribe(
-            result -> {
-                try {
-                    // 응답 객체 생성
-                    AnalysisResponse response = AnalysisResponse.builder()
-                        .exchange(result.getExchange())
-                        .currencyPair(result.getCurrencyPair())
-                        .symbol(result.getSymbol())
-                        .quoteCurrency(result.getQuoteCurrency())
-                        .analysisTime(result.getAnalysisTime())
-                        .currentPrice(result.getCurrentPrice())
-                        .tradingStyle(result.getTradingStyle() != null ? result.getTradingStyle() : request.getTradingStyle())
-                        .buySignalStrength(result.getBuySignalStrength())
-                        .marketCondition(result.getMarketCondition())
-                        .marketConditionStrength(result.getMarketConditionStrength())
-                        .volumeSignalStrength(result.getVolumeSignalStrength())
-                        .smaMediumDifference(result.getSmaMediumDifference())
-                        .smaSignal(result.getSmaSignal())
-                        .rsiValue(result.getRsiValue())
-                        .rsiSignal(result.getRsiSignal())
-                        .bollingerSignal(result.getBollingerSignal())
-                        .bollingerWidth(result.getBollingerWidth())
-                        .analysisResult(result.getAnalysisResult())
-                        .message(result.getMessage())
-                        .volumeChangePercent(result.getVolumeChangePercent())  // 이 부분만 추가
-                        .priceChangePercent(result.getPriceChangePercent())
-                        .build();
-                    
-                    // 디버깅을 위한 로깅 추가
-                    if (result.getRsiSignal() == null || result.getBollingerSignal() == null || 
-                        result.getSmaSignal() == null || result.getMarketCondition() == null ||
-                        result.getBuySignalStrength() == 0.0 || result.getRsiValue() == 0.0) {
-                        log.warn("분석 결과에 null 또는 0 값이 있습니다: rsiSignal={}, bollingerSignal={}, smaSignal={}, marketCondition={}, buySignalStrength={}, rsiValue={}",
-                            result.getRsiSignal(), result.getBollingerSignal(), result.getSmaSignal(), 
-                            result.getMarketCondition(), result.getBuySignalStrength(), result.getRsiValue());
+    public void handleTextMessage(WebSocketSession session, TextMessage message) {
+        try {
+            // 메시지를 DTO 객체로 직접 변환
+            AnalysisRequest request = objectMapper.readValue(message.getPayload(), AnalysisRequest.class);
+            String action = request.getAction();
+            
+            if ("startAnalysis".equals(action)) {
+                // 인프라 상태 확인
+                var status = infraStatus.getStatus();
+                if (!status.isValid()) {
+                    sendErrorMessage(session, "Trading infrastructure is not ready. Please try again later.");
+                    return;
+                }
+                
+                // 분석 시작
+                log.info("Starting analysis for {}-{}, style: {}", 
+                         request.getExchange(), request.getCurrencyPair(), request.getTradingStyle());
+                
+                // 기존 분석 저장
+                activeAnalysis.put(session, request);
+                
+                // 분석 시작 및 응답 구독
+                Flux<AnalysisResponse> flux = marketAnalysisService.startRealtimeAnalysis(request);
+                
+                // 분석 결과 처리
+                Disposable subscription = flux.subscribe(
+                    response -> {
+                        try {
+                            // 새 응답 객체 생성하여 카드 ID 정보 포함
+                            AnalysisResponse responseWithCardInfo = AnalysisResponse.builder()
+                                .exchange(response.getExchange())
+                                .currencyPair(response.getCurrencyPair())
+                                .symbol(response.getSymbol())
+                                .quoteCurrency(response.getQuoteCurrency())
+                                .analysisTime(response.getAnalysisTime())
+                                .currentPrice(response.getCurrentPrice())
+                                .priceChangePercent(response.getPriceChangePercent())
+                                .volumeChangePercent(response.getVolumeChangePercent())
+                                .reboundProbability(response.getReboundProbability())
+                                .analysisResult(response.getAnalysisResult())
+                                .message(response.getMessage())
+                                .tradingStyle(response.getTradingStyle())
+                                .buySignalStrength(response.getBuySignalStrength())
+                                .sma1Difference(response.getSma1Difference())
+                                .smaMediumDifference(response.getSmaMediumDifference())
+                                .sma3Difference(response.getSma3Difference())
+                                .smaBreakout(response.isSmaBreakout())
+                                .smaSignal(response.getSmaSignal())
+                                .rsiValue(response.getRsiValue())
+                                .rsiSignal(response.getRsiSignal())
+                                .bollingerUpper(response.getBollingerUpper())
+                                .bollingerMiddle(response.getBollingerMiddle())
+                                .bollingerLower(response.getBollingerLower())
+                                .bollingerSignal(response.getBollingerSignal())
+                                .bollingerWidth(response.getBollingerWidth())
+                                .volumeSignalStrength(response.getVolumeSignalStrength())
+                                .marketCondition(response.getMarketCondition())
+                                .marketConditionStrength(response.getMarketConditionStrength())
+                                // 카드 정보 추가
+                                .cardId(request.getCardId())
+                                .shortId(request.getShortId())
+                                .createdAt(request.getCreatedAt())
+                                .build();
+                            
+                            // 응답 전송
+                            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(responseWithCardInfo)));
+                        } catch (Exception e) {
+                            log.error("Error sending analysis response: ", e);
+                        }
+                    },
+                    error -> {
+                        log.error("Error in analysis flux: ", error);
+                        try {
+                            Map<String, Object> errorResponse = new HashMap<>();
+                            errorResponse.put("error", "Analysis error: " + error.getMessage());
+                            // 에러 응답에도 카드 ID 포함
+                            errorResponse.put("cardId", request.getCardId());
+                            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
+                        } catch (Exception e) {
+                            log.error("Error sending error response: ", e);
+                        }
                     }
-                    
-                    // JSON 변환 및 전송
-                    String json = objectMapper.writeValueAsString(response);
-                    log.info("JSON 변환 후 데이터 확인: {}", json);
-                    session.sendMessage(new TextMessage(json));
-                    
-                } catch (Exception e) {
-                    log.error("Error sending analysis result: ", e);
-                }
-            },
-            error -> {
-                log.error("Analysis error: ", error);
-                try {
-                    // 에러 메시지 전송
-                    Map<String, Object> errorResponse = new HashMap<>();
-                    errorResponse.put("error", "Analysis failed: " + error.getMessage());
-                    session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
-                } catch (Exception e) {
-                    log.error("Error sending error message: ", e);
-                }
+                );
+                
+                // 구독 저장
+                subscriptions.put(session, subscription);
+            } else if ("stopAnalysis".equals(action)) {
+                stopRealtimeAnalysis(session);
             }
-        );
-        
-        // 세션별 구독 정보 저장
-        subscriptions.put(session, subscription);
+        } catch (Exception e) {
+            log.error("Error processing message: ", e);
+            sendErrorMessage(session, "Failed to process your request: " + e.getMessage());
+        }
     }
 
     @Override
@@ -142,6 +147,17 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
         AnalysisRequest request = activeAnalysis.remove(session);
         if (request != null) {
             marketAnalysisService.stopRealtimeAnalysis(request);
+        }
+    }
+
+    private void sendErrorMessage(WebSocketSession session, String message) {
+        try {
+            // 에러 메시지 전송
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", message);
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
+        } catch (Exception e) {
+            log.error("Error sending error message: ", e);
         }
     }
 } 

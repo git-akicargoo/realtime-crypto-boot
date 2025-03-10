@@ -18,12 +18,21 @@ const WebSocketService = (function() {
     function startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card, tradingStyle = 'dayTrading') {
         console.log('분석 시작:', exchange, currencyPair, '모드:', tradingStyle);
         
-        const connectionId = `${exchange}-${currencyPair}`.toLowerCase();
-        console.log('연결 ID:', connectionId);
+        // 카드의 고유 ID 사용
+        const cardId = card.id;
         
-        // 이미 웹소켓 연결이 있는지 확인
+        // baseId와 connectionId를 cardId와 동일하게 사용 (중요: 이 부분이 핵심 수정)
+        const connectionId = cardId;  // 이전: const connectionId = baseId;
+        
+        // 카드의 생성 시간 가져오기
+        const createdAt = card.getAttribute('data-created-at');
+        const shortId = card.getAttribute('data-short-id');
+        
+        console.log('연결 ID:', connectionId, '카드 ID:', cardId, '생성 시간:', createdAt);
+        
+        // 이미 연결된 경우 재사용
         if (activeConnections[connectionId]) {
-            console.log('이미 웹소켓 연결이 있습니다.');
+            console.log('기존 연결 재사용:', connectionId);
             return;
         }
         
@@ -41,102 +50,63 @@ const WebSocketService = (function() {
             stopButton.style.display = 'inline-block';
         }
         
-        // 웹소켓 URL 설정 - 환경에 따라 조정
+        // 웹소켓 URL 생성
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsHost = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
-        const wsUrl = `${wsProtocol}//${wsHost}/ws/analysis`;
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/analysis`;
         
-        console.log('웹소켓 URL:', wsUrl);
+        console.log('웹소켓 연결 시도:', wsUrl);
         
-        // 웹소켓 연결 상태 초기화
-        connectionStatuses[connectionId] = {
-            connected: false,
-            reconnectAttempts: 0,
-            lastError: null
-        };
-        
-        // 웹소켓 연결
+        // 웹소켓 연결 설정
         const ws = new WebSocket(wsUrl);
-        activeConnections[connectionId] = ws;
         
+        // 연결 이벤트 처리
         ws.onopen = function() {
-            console.log('웹소켓 연결됨:', wsUrl);
-            connectionStatuses[connectionId].connected = true;
+            console.log(`[${connectionId}] 웹소켓 연결됨`);
+            connectionStatuses[connectionId] = 'CONNECTED';
             
-            // 메시지 형식 수정: command와 data 필드 추가
-            const request = {
-                command: "start",  // command 필드 추가
-                data: {            // 모든 데이터를 data 객체 안에 포함
+            try {
+                // 분석 시작 요청 전송
+                const requestData = {
+                    action: "startAnalysis",
                     exchange: exchange,
                     currencyPair: currencyPair,
                     symbol: symbol,
                     quoteCurrency: quoteCurrency,
                     tradingStyle: tradingStyle,
-                    rsiPeriod: 14,
-                    rsiOverbought: 70,
-                    rsiOversold: 30,
-                    bollingerPeriod: 20,
-                    bollingerDeviation: 2
-                }
-            };
-            
-            console.log('분석 요청 전송:', request);
-            ws.send(JSON.stringify(request));
+                    cardId: cardId,
+                    shortId: shortId,
+                    createdAt: createdAt
+                };
+                
+                console.log(`[${connectionId}] 분석 요청 보내기:`, requestData);
+                ws.send(JSON.stringify(requestData));
+            } catch (error) {
+                console.error(`[${connectionId}] 요청 전송 중 오류:`, error);
+                showError(card, "분석 요청 전송 중 오류가 발생했습니다.");
+            }
         };
         
         ws.onmessage = function(event) {
-            console.log(`[${connectionId}] 데이터 수신:`, event.data);
-            
             try {
-                const data = JSON.parse(event.data);
+                const response = JSON.parse(event.data);
+                console.log(`[${connectionId}] 웹소켓 응답 받음:`, response);
                 
-                // 로딩 표시 숨기기
-                if (loadingIndicator) {
-                    loadingIndicator.style.display = 'none';
-                }
-                
-                // 카드 ID 가져오기
-                const cardId = card.id;
-                
-                // 등록된 콜백이 있으면 호출
-                if (messageCallbacks[cardId]) {
-                    console.log(`[${cardId}] 메시지 콜백 호출`);
-                    messageCallbacks[cardId](data);
+                // 응답에 카드 ID가 있는지 확인
+                if (response.cardId) {
+                    console.log(`[${connectionId}] 응답 카드 ID: ${response.cardId}, 현재 카드 ID: ${cardId}`);
                 } else {
-                    // 기존 방식으로 카드 업데이트
-                    console.log(`[${cardId}] 기본 업데이트 사용`);
-                    
-                    // 카드 컴포넌트의 processWebSocketMessage 함수 직접 호출
-                    if (window.CardComponent && typeof window.CardComponent.processWebSocketMessage === 'function') {
-                        console.log(`[${cardId}] processWebSocketMessage 함수 호출`);
-                        try {
-                            window.CardComponent.processWebSocketMessage(card, data);
-                        } catch (error) {
-                            console.error(`[${cardId}] processWebSocketMessage 함수 호출 중 오류 발생:`, error);
-                            // 오류 발생 시 기본 updateCard 함수로 폴백
-                            if (window.CardComponent && typeof window.CardComponent.updateCard === 'function') {
-                                console.log(`[${cardId}] 폴백: updateCard 함수 호출`);
-                                window.CardComponent.updateCard(card, data);
-                            }
-                        }
-                    } else {
-                        // 기존 updateCard 함수 호출
-                        console.log(`[${cardId}] updateCard 함수 호출`);
-                        if (window.CardComponent) {
-                            window.CardComponent.updateCard(card, data);
-                        } else {
-                            console.error(`[${cardId}] CardComponent를 찾을 수 없습니다.`);
-                        }
-                    }
+                    console.warn(`[${connectionId}] 응답에 카드 ID 없음`);
                 }
                 
-                // 대시보드에도 데이터 추가
-                if (window.DashboardComponent) {
-                    window.DashboardComponent.addDataPoint(data);
+                // 콜백 실행
+                if (messageCallbacks[connectionId]) {
+                    console.log(`[${connectionId}] 메시지 콜백 실행`);
+                    messageCallbacks[connectionId](response);
+                } else {
+                    console.warn(`[${connectionId}] 메시지 콜백 없음`);
                 }
             } catch (error) {
-                console.error('데이터 처리 오류:', error);
-                showError(card, '데이터 처리 중 오류가 발생했습니다.');
+                console.error(`[${connectionId}] 응답 처리 중 오류:`, error, event.data);
             }
         };
         

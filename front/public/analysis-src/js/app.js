@@ -263,32 +263,61 @@ function setupEventListeners() {
     const startAnalysisBtn = document.getElementById('startAnalysis');
     if (startAnalysisBtn) {
         startAnalysisBtn.addEventListener('click', async function() {
-            // 이미 경고창이 표시 중이면 중복 표시하지 않음
-            if (state.alertShowing) {
+            console.log('분석 시작 버튼 클릭');
+            
+            if (!state.systemReady) {
+                showAlert('시스템이 준비되지 않았습니다. 인프라 상태를 확인하세요.');
                 return;
             }
             
-            // 버튼 클릭 시 현재 시스템 상태 다시 확인
-            const status = await StatusService.checkSystemStatus();
+            // 거래소, 코인, 화폐 선택 확인
+            const exchange = document.getElementById('exchange').value;
+            const symbol = document.getElementById('symbol').value;
+            const quoteCurrency = document.getElementById('quoteCurrency').value;
+            const tradingStyle = document.getElementById('tradingStyle').value;
             
-            if (!status.valid) {
-                // 경고창 표시 중 플래그 설정
-                state.alertShowing = true;
-                
-                // 시스템 상태가 유효하지 않으면
-                let errorMessage = '현재 시스템을 사용할 수 없습니다. 시스템 조건이 만족되지 않습니다:';
-                if (!status.redisOk) errorMessage += ' Redis 연결 실패,';
-                if (!status.kafkaOk) errorMessage += ' Kafka 연결 실패,';
-                if (!status.leaderOk) errorMessage += ' 리더 노드가 아님,';
-                
-                // 커스텀 경고창 생성
-                showCustomAlert(errorMessage.slice(0, -1));
-                
-                return; // 함수 종료, 분석 시작하지 않음
+            if (!exchange || !symbol || !quoteCurrency) {
+                showAlert('거래소, 기준 화폐, 코인을 모두 선택하세요.');
+                return;
             }
             
-            // 시스템 상태가 정상이면 분석 시작
-            startNewAnalysis();
+            console.log('분석 파라미터:', exchange, symbol, quoteCurrency, tradingStyle);
+            
+            // 거래쌍 구성
+            const currencyPair = `${quoteCurrency}-${symbol}`;
+            const displayPair = `${symbol}/${quoteCurrency}`;
+            
+            // 이미 동일한 분석이 진행 중인지 확인
+            const baseId = `${exchange}-${currencyPair}`.toLowerCase();
+            if (state.activeCards[baseId]) {
+                showAlert('이미 동일한 거래쌍의 분석이 진행 중입니다.');
+                return;
+            }
+            
+            // 카드 생성
+            const card = CardComponent.createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
+            
+            // 카드 정보 저장
+            state.activeCards[baseId] = {
+                exchange: exchange,
+                currencyPair: currencyPair,
+                element: card,
+                cardId: card.id
+            };
+            
+            console.log('카드 생성 완료, ID:', card.id);
+            
+            // 카드 컨테이너에 추가
+            document.getElementById('cardsContainer').appendChild(card);
+            
+            // 중요: 웹소켓 메시지 콜백 등록 - 반드시 startAnalysis 전에 호출
+            WebSocketService.onMessage(card.id, function(data) {
+                console.log('웹소켓 메시지 콜백 실행:', card.id, data);
+                CardComponent.processWebSocketMessage(data);
+            });
+            
+            // 분석 시작
+            WebSocketService.startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card, tradingStyle);
         });
     }
     
@@ -478,48 +507,30 @@ function startNewAnalysis() {
         currencyPair = `${symbol}${quoteCurrency}`;
     }
     
-    const displayPair = `${symbol}/${quoteCurrency}`;
-    const cardId = `${exchange}-${currencyPair}`.toLowerCase();
+    // 표시 통화쌍 설정
+    const displayPair = exchange === 'UPBIT' ? currencyPair : `${symbol}/${quoteCurrency}`;
     
-    // 이미 같은 분석이 있는지 확인
-    if (state.activeCards[cardId]) {
-        alert('이미 같은 분석이 추가되어 있습니다.');
-        return;
-    }
-    
-    // CardComponent가 존재하는지 확인
-    if (!CardComponent) {
-        console.error('카드 컴포넌트를 찾을 수 없습니다. 스크립트 로드 순서를 확인하세요.');
-        return;
-    }
-    
-    // 카드 생성 및 분석 시작
+    // 카드 생성
     const card = CardComponent.createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
-    const container = document.getElementById('cardsContainer');
-    if (container) {
-        container.appendChild(card);
-        
-        // 카드 생성 후 자동으로 분석 시작 (카드 내부의 시작 버튼 클릭)
-        const startButton = card.querySelector('.start-button');
-        if (startButton) {
-            startButton.click();
-        }
-        
-        // 활성 카드 목록에 추가 (객체에 추가)
-        state.activeCards[cardId] = {
-            id: cardId,
-            element: card,
-            params: { 
-                exchange, 
-                currencyPair, 
-                symbol, 
-                quoteCurrency, 
-                tradingStyle 
-            }
-        };
-        
-        console.log('새 분석 카드 추가:', cardId, state.activeCards[cardId]);
-    }
+    
+    // 카드 ID 가져오기 (이제 UUID가 포함된 고유 ID)
+    const cardId = card.id;
+    
+    // 카드 컨테이너에 추가
+    document.getElementById('cardsContainer').appendChild(card);
+    
+    // 활성 카드 목록에 추가
+    state.activeCards[cardId] = {
+        exchange,
+        currencyPair,
+        symbol,
+        quoteCurrency,
+        element: card,
+        tradingStyle,
+        active: false
+    };
+    
+    console.log('새 분석 카드 추가:', cardId, state.activeCards[cardId]);
 }
 
 function initializeTheme() {

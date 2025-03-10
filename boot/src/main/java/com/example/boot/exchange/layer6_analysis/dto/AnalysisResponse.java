@@ -55,6 +55,11 @@ public class AnalysisResponse {
     private String marketCondition; // "OVERBOUGHT", "OVERSOLD", "NEUTRAL"
     private double marketConditionStrength; // 과매수/과매도 강도 (0-100%)
 
+    // 프론트엔드 통합용 추가 필드
+    private String cardId;
+    private String shortId;
+    private String createdAt;
+
     public Double getSmaShortDifference() {
         return this.sma1Difference;
     }

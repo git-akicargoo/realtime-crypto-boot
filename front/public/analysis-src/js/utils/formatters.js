@@ -85,12 +85,18 @@ const FormatUtils = (function() {
         }
     }
     
+    // 짧은 ID 생성 (8자)
+    function generateShortId() {
+        return Math.random().toString(16).substring(2, 10);
+    }
+    
     // 공개 API
     return {
         formatNumber,
         formatPrice,
         formatPercent,
         formatDateTime,
-        formatTime
+        formatTime,
+        generateShortId
     };
 })(); 

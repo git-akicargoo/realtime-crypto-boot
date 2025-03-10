@@ -26,20 +26,33 @@ const CardComponent = (function() {
     function createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair) {
         console.log('카드 생성:', exchange, currencyPair, symbol, quoteCurrency, displayPair);
         
+        // 기본 ID (하위 호환성 유지)
+        const baseId = `${exchange}-${currencyPair}`.toLowerCase();
+        
+        // 짧은 ID 생성 (8자)
+        const shortId = FormatUtils.generateShortId();
+        const cardId = `${baseId}-${shortId}`;
+        
+        // 카드 생성 시간
+        const createdAt = new Date();
+        const createdAtFormatted = FormatUtils.formatDateTime(createdAt);
+        
         const card = document.createElement('div');
         card.className = 'analysis-card';
-        card.id = `${exchange}-${currencyPair}`.toLowerCase();
+        card.id = cardId;
         
         // 데이터 속성 추가
         card.setAttribute('data-exchange', exchange);
         card.setAttribute('data-currency-pair', currencyPair);
         card.setAttribute('data-symbol', symbol);
         card.setAttribute('data-quote-currency', quoteCurrency);
-        card.setAttribute('data-card-id', card.id);
+        card.setAttribute('data-base-id', baseId);
+        card.setAttribute('data-short-id', shortId);
+        card.setAttribute('data-created-at', createdAt.toISOString());
         
-        console.log('카드 ID:', card.id);
+        console.log('카드 ID:', cardId, '기본 ID:', baseId, '짧은 ID:', shortId);
         
-        // 카드 내용 생성 (모의 거래 부분 제거)
+        // 카드 내용 생성
         card.innerHTML = `
             <div class="card-header">
                 <div class="exchange-pair">${exchange} - ${displayPair}</div>
@@ -49,6 +62,10 @@ const CardComponent = (function() {
                     <button class="retry-button" style="display: none;">재시도</button>
                     <button class="delete-button">삭제</button>
                 </div>
+            </div>
+            <div class="card-subheader">
+                <div class="card-created-time">생성: ${createdAtFormatted}</div>
+                <div class="card-id-display">ID: ${baseId}-${shortId}</div>
             </div>
             <div class="loading-indicator" style="display: none;">
                 <div class="spinner"></div>
@@ -248,57 +265,70 @@ const CardComponent = (function() {
     }
     
     // 카드 업데이트 함수
-    function updateCard(exchange, currencyPair, data) {
-        const cardId = `${exchange}-${currencyPair}`.toLowerCase();
-        const card = document.getElementById(cardId);
+    function updateCard(card, data) {
+        console.log(`카드 업데이트 시작 (ID: ${card.id})`, data);
         
-        if (!card) {
-            console.warn('카드를 찾을 수 없음:', cardId);
-            return;
+        try {
+            // 로딩 표시 숨기기
+            const loadingIndicator = card.querySelector('.loading-indicator');
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'none';
+            }
+            
+            // 카드 ID 및 데이터 확인
+            const cardId = card.id;
+            console.log(`[${cardId}] 카드 업데이트 데이터:`, data);
+            
+            // 여기서 실제 UI 업데이트 로직 실행
+            updateCardUI(card, data);
+            
+        } catch (error) {
+            console.error(`카드 업데이트 중 오류 (ID: ${card.id}):`, error);
         }
-        
-        console.log('카드 업데이트:', cardId, data);
-        
-        processWebSocketMessage(card, data);
     }
     
-    // 웹소켓 메시지 처리 함수 - 데이터 구조 문제 해결
-    function processWebSocketMessage(card, message) {
-        if (!card || !message) {
-            console.error('유효하지 않은 카드 또는 메시지:', card, message);
+    // 웹소켓 메시지 처리 함수
+    function processWebSocketMessage(data) {
+        console.log('WebSocket 메시지 수신:', data);
+        
+        // 에러 메시지 처리
+        if (data.error) {
+            console.error('WebSocket 에러:', data.error);
             return;
         }
-
-        const cardId = card.id;
-        console.log(`[${cardId}] WebSocket 메시지 처리 시작`);
         
-        // 중요: 메시지에서 실제 데이터 추출
-        let data = message;
-        if (message.type === 'analysis' && message.data) {
-            data = message.data;  // 여기가 핵심! message.data를 사용해야 함
-            console.log(`[${cardId}] 분석 데이터 추출 성공`);
+        // cardId 확인 (새로운 응답 형식)
+        if (data.cardId) {
+            console.log('응답에 cardId 포함됨:', data.cardId);
+            const card = document.getElementById(data.cardId);
+            if (card) {
+                console.log('cardId로 카드 찾음:', data.cardId);
+                updateCard(card, data);
+                return;
+            } else {
+                console.warn('cardId에 해당하는 카드를 찾을 수 없음:', data.cardId);
+            }
         }
         
-        console.log(`[${cardId}] 처리할 데이터:`, data);
-
-        // 현재 가격 업데이트
-        if (data.currentPrice !== undefined) {
-            console.log(`[${cardId}] 현재 가격 업데이트: ${data.currentPrice}`);
-            const mockData = getMockTradingData(card);
-            mockData.currentPrice = data.currentPrice;
-        }
-
-        // 신호 강도 저장
-        if (data.buySignalStrength !== undefined) {
-            console.log(`[${cardId}] 매수 신호 강도 업데이트: ${data.buySignalStrength}%`);
-            const mockData = getMockTradingData(card);
-            mockData.signalStrength = data.buySignalStrength;
-        }
-
-        // 기존 UI 업데이트 함수 호출 - 추출된 데이터로!
-        updateCardUI(card, data);
+        // 기존 로직 - exchange와 currencyPair로 카드 찾기
+        const exchange = data.exchange;
+        const currencyPair = data.currencyPair;
         
-        console.log(`[${cardId}] WebSocket 메시지 처리 완료`);
+        if (!exchange || !currencyPair) {
+            console.error('메시지에 필수 정보가 없습니다:', data);
+            return;
+        }
+        
+        // 기존 방식으로 카드 찾기
+        const baseId = `${exchange}-${currencyPair}`.toLowerCase();
+        const card = document.querySelector(`[data-base-id="${baseId}"]`);
+        
+        if (card) {
+            console.log('baseId로 카드 찾음:', baseId);
+            updateCard(card, data);
+        } else {
+            console.warn(`카드를 찾을 수 없음: ${baseId}`, data);
+        }
     }
     
     // UI 업데이트 함수
