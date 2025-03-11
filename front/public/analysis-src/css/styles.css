@@ -204,155 +204,23 @@ select {
 }
 
 /* 버튼 그룹 스타일 */
-.button-group {
-    display: flex;
-    gap: 10px;
-}
-
-.signal-btn {
-    flex: 1;
-    padding: 8px;
-    border: 1px solid var(--border-color);
-    background-color: var(--background-color);
-    color: var(--text-color);
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.signal-btn:hover {
-    background-color: var(--hover-color);
-}
-
-.signal-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
+/* 이 부분은 simul-trading.css로 이동했으므로 제거합니다 */
 
 /* 정적 값 표시 */
-.static-value {
-    padding: 8px 12px;
-    background-color: var(--input-bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    color: var(--text-color);
-}
+/* 이 부분은 simul-trading.css로 이동했으므로 제거합니다 */
 
 /* 거래 제한 입력 그룹 */
-.trading-limits {
-    display: flex;
-    gap: 15px;
-}
-
-.limit-input {
-    flex: 1;
-}
+/* 이 부분은 simul-trading.css로 이동했으므로 제거합니다 */
 
 /* 상태 컨테이너 */
-.status-container {
-    margin: 20px 0;
-    padding: 15px;
-    background-color: var(--card-bg-color);
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.status-info {
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 20px;
-}
-
-.info-group {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.info-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.info-label {
-    font-weight: 500;
-    color: var(--text-secondary-color);
-}
-
-.info-value {
-    font-weight: 600;
-}
-
-.info-value.positive {
-    color: var(--positive-color);
-}
-
-.info-value.negative {
-    color: var(--negative-color);
-}
+/* 이 부분은 simul-trading.css로 이동했으므로 제거합니다 */
 
 /* 테이블 컨테이너 */
-.table-container {
-    margin: 20px 0;
-    padding: 15px;
-    background-color: var(--card-bg-color);
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    max-height: 400px;
-    overflow-y: auto;
-}
-
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-    padding: 10px;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.data-table th {
-    background-color: var(--table-header-bg);
-    color: var(--text-color);
-    font-weight: 600;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-
-.data-table tr:last-child td {
-    border-bottom: none;
-}
-
-.data-table tr:hover td {
-    background-color: var(--hover-color);
-}
-
-.data-table td.positive {
-    color: var(--positive-color);
-}
-
-.data-table td.negative {
-    color: var(--negative-color);
-}
+/* 이 부분은 simul-trading.css로 이동했으므로 제거합니다 */
 
 /* 반응형 조정 */
 @media (max-width: 768px) {
-    .status-info {
-        flex-direction: column;
-    }
-    
-    .trading-limits {
-        flex-direction: column;
-    }
-    
-    .table-container {
-        overflow-x: auto;
+    .content-wrapper {
+        grid-template-columns: 1fr;
     }
 } 
