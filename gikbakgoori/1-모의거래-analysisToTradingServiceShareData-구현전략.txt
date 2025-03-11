@@ -1,0 +1,555 @@
+# 모의거래 구현을 위한 데이터 공유 서비스 전략
+
+## 1. 문제 상황
+
+현재 `AnalysisWebSocketHandler`에서 분석 데이터를 처리하고 있어 다른 서비스(모의거래 서비스)에서 이 데이터를 활용하기 어려운 상황입니다. 모의거래 기능을 구현하기 위해서는 분석 데이터를 공유하는 방법이 필요합니다.
+
+## 2. 해결 방안: 분석 데이터 공유 서비스 도입
+
+### 2.1 핵심 아이디어
+- 분석 데이터를 중앙에서 관리하고 공유할 수 있는 서비스 생성
+- 웹소켓 핸들러에서 생성된 분석 데이터를 이 서비스에 저장
+- 모의거래 서비스에서는 이 공유 서비스를 통해 분석 데이터에 접근
+
+### 2.2 카드 ID 생성 및 관리 흐름
+1. 프론트엔드에서 분석 시작 요청을 웹소켓을 통해 전송
+2. `AnalysisWebSocketHandler`에서 카드 ID 생성:
+   ```java
+   String baseCardId = (request.getExchange() + "-" + request.getCurrencyPair()).toLowerCase();
+   String uuid = Long.toHexString(Double.doubleToLongBits(Math.random())).substring(0, 8);
+   String cardId = baseCardId + "-" + uuid;
+   ```
+3. 생성된 카드 ID를 요청 객체에 설정:
+   ```java
+   request.setCardId(cardId);
+   request.setTimestamp(timestamp);
+   ```
+4. `MarketAnalysisService`에서 이 카드 ID를 사용하여 분석 시작
+5. 분석 결과가 생성될 때마다 공유 서비스에 저장
+
+## 3. 단계별 구현 계획
+
+### 단계 1: 분석 데이터 공유 서비스 구현 (기초)
+**목표**: 분석 데이터를 저장하고 조회할 수 있는 기본 서비스 구현
+
+**구현 내용**:
+1. `AnalysisDataSharingService` 클래스 생성
+2. 카드 ID를 키로 하는 분석 데이터 저장소 구현
+3. 기본 CRUD 메서드 구현:
+   - `saveAnalysisRequest(AnalysisRequest request)`
+   - `getAnalysisRequest(String cardId)`
+   - `updateAnalysisData(String cardId, AnalysisResponse data)`
+   - `getLatestAnalysisData(String cardId)`
+   - `removeCard(String cardId)`
+
+**테스트 방법**:
+- 단위 테스트로 데이터 저장 및 조회 기능 검증
+- 로그를 통한 데이터 흐름 확인
+
+### 단계 2: AnalysisWebSocketHandler 연동
+**목표**: 웹소켓 핸들러에서 분석 데이터 공유 서비스 활용
+
+**구현 내용**:
+1. `AnalysisWebSocketHandler`에 `AnalysisDataSharingService` 주입
+2. 카드 생성 시 분석 요청 정보 저장 로직 추가
+3. 분석 결과 수신 시 공유 서비스에 데이터 업데이트 로직 추가
+4. 분석 중지 시 공유 서비스에서 데이터 제거 로직 추가
+
+**테스트 방법**:
+- 분석 시작/중지 시나리오 테스트
+- 로그를 통한 데이터 흐름 확인
+- 실제 분석 카드 생성 및 데이터 확인
+
+### 단계 3: 카드 목록 API 구현
+**목표**: 프론트엔드에서 활성 카드 목록을 조회할 수 있는 API 구현
+
+**구현 내용**:
+1. `CardInfoDTO` 클래스 구현
+2. `AnalysisDataSharingService`에 카드 목록 조회 메서드 추가:
+   - `getActiveCardsList()`
+3. `SimulTradingController` 구현:
+   - `GET /api/simul-trading/cards` 엔드포인트 구현
+
+**테스트 방법**:
+- API 엔드포인트 직접 호출 테스트
+- 여러 카드 생성 후 목록 조회 테스트
+- 프론트엔드에서 카드 목록 표시 확인
+
+### 단계 4: 구독 기능 구현
+**목표**: 분석 데이터 업데이트를 실시간으로 구독할 수 있는 기능 구현
+
+**구현 내용**:
+1. `AnalysisDataSharingService`에 구독 관련 메서드 추가:
+   - `subscribeToAnalysisData(String cardId, Consumer<AnalysisResponse> subscriber)`
+   - `unsubscribeFromAnalysisData(String cardId, Consumer<AnalysisResponse> subscriber)`
+2. 구독자 관리 로직 구현
+3. 데이터 업데이트 시 구독자에게 알림 로직 구현
+
+**테스트 방법**:
+- 구독 및 알림 기능 단위 테스트
+- 여러 구독자 시나리오 테스트
+- 로그를 통한 알림 흐름 확인
+
+### 단계 5: 모의거래 기본 구조 구현
+**목표**: 모의거래 서비스 및 웹소켓 핸들러의 기본 구조 구현
+
+**구현 내용**:
+1. `SimulTradingSession` 모델 클래스 구현
+2. `SimulTradingRequest`/`SimulTradingResponse` DTO 클래스 구현
+3. `SimulTradingService` 기본 구조 구현:
+   - `startSimulTrading(SimulTradingRequest request)`
+   - `stopSimulTrading(String cardId)`
+4. `SimulTradingWebSocketHandler` 기본 구조 구현
+
+**테스트 방법**:
+- 서비스 메서드 단위 테스트
+- 모의거래 시작/중지 시나리오 테스트
+- 로그를 통한 흐름 확인
+
+### 단계 6: 모의거래 로직 구현
+**목표**: 분석 데이터를 기반으로 매수/매도 신호를 처리하는 로직 구현
+
+**구현 내용**:
+1. `SimulTradingService`에 분석 데이터 처리 메서드 구현:
+   - `processAnalysisUpdate(SimulTradingSession session, AnalysisResponse analysisData)`
+2. 매수 신호 처리 로직 구현:
+   - `checkBuySignal(SimulTradingSession session, AnalysisResponse analysis)`
+   - `executeBuy(SimulTradingSession session, double price)`
+3. 매도 신호 처리 로직 구현:
+   - `checkSellSignal(SimulTradingSession session, AnalysisResponse analysis)`
+   - `executeSell(SimulTradingSession session, double price, String reason)`
+
+**테스트 방법**:
+- 매수/매도 로직 단위 테스트
+- 다양한 시나리오(익절, 손절, 신호 기반) 테스트
+- 거래 내역 생성 및 저장 확인
+
+### 단계 7: 프론트엔드 연동
+**목표**: 프론트엔드에서 모의거래 기능을 사용할 수 있도록 구현
+
+**구현 내용**:
+1. 카드 목록 조회 및 표시 기능 구현
+2. 모의거래 설정 폼 구현
+3. 모의거래 시작/중지 기능 구현
+4. 웹소켓 연결 및 거래 내역 표시 기능 구현
+
+**테스트 방법**:
+- 전체 흐름 통합 테스트
+- 실제 사용자 시나리오 테스트
+- UI/UX 검증
+
+## 4. 구현 코드 예시
+
+### 3.1 분석 데이터 공유 서비스 생성
+
+```java
+// com.example.boot.exchange.layer6_analysis.service.AnalysisDataSharingService.java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AnalysisDataSharingService {
+    
+    // 카드 ID를 키로 하여 최신 분석 데이터를 저장
+    private final Map<String, AnalysisResponse> latestAnalysisData = new ConcurrentHashMap<>();
+    
+    // 카드 ID를 키로 하여 분석 요청 정보 저장
+    private final Map<String, AnalysisRequest> analysisRequests = new ConcurrentHashMap<>();
+    
+    // 카드 ID를 키로 하여 분석 데이터 구독자 목록 저장
+    private final Map<String, List<Consumer<AnalysisResponse>>> subscribers = new ConcurrentHashMap<>();
+    
+    // 분석 요청 정보 저장
+    public void saveAnalysisRequest(AnalysisRequest request) {
+        analysisRequests.put(request.getCardId(), request);
+    }
+    
+    // 분석 요청 정보 조회
+    public AnalysisRequest getAnalysisRequest(String cardId) {
+        return analysisRequests.get(cardId);
+    }
+    
+    // 최신 분석 데이터 업데이트 및 구독자에게 알림
+    public void updateAnalysisData(String cardId, AnalysisResponse data) {
+        latestAnalysisData.put(cardId, data);
+        
+        // 구독자들에게 데이터 전달
+        List<Consumer<AnalysisResponse>> cardSubscribers = subscribers.get(cardId);
+        if (cardSubscribers != null) {
+            for (Consumer<AnalysisResponse> subscriber : cardSubscribers) {
+                try {
+                    subscriber.accept(data);
+                } catch (Exception e) {
+                    log.error("Error notifying subscriber for card {}: {}", cardId, e.getMessage());
+                }
+            }
+        }
+    }
+    
+    // 최신 분석 데이터 조회
+    public AnalysisResponse getLatestAnalysisData(String cardId) {
+        return latestAnalysisData.get(cardId);
+    }
+    
+    // 분석 데이터 구독
+    public void subscribeToAnalysisData(String cardId, Consumer<AnalysisResponse> subscriber) {
+        subscribers.computeIfAbsent(cardId, k -> new CopyOnWriteArrayList<>()).add(subscriber);
+    }
+    
+    // 분석 데이터 구독 취소
+    public void unsubscribeFromAnalysisData(String cardId, Consumer<AnalysisResponse> subscriber) {
+        List<Consumer<AnalysisResponse>> cardSubscribers = subscribers.get(cardId);
+        if (cardSubscribers != null) {
+            cardSubscribers.remove(subscriber);
+        }
+    }
+    
+    // 활성 카드 목록 조회
+    public Set<String> getActiveCardIds() {
+        return latestAnalysisData.keySet();
+    }
+    
+    // 카드 정보 조회 (카드 ID 목록 반환용)
+    public List<CardInfoDTO> getActiveCardsList() {
+        List<CardInfoDTO> result = new ArrayList<>();
+        
+        for (Map.Entry<String, AnalysisRequest> entry : analysisRequests.entrySet()) {
+            String cardId = entry.getKey();
+            AnalysisRequest request = entry.getValue();
+            AnalysisResponse latestData = latestAnalysisData.get(cardId);
+            
+            // 최신 데이터가 없는 경우 스킵
+            if (latestData == null) continue;
+            
+            CardInfoDTO cardInfo = CardInfoDTO.builder()
+                .cardId(cardId)
+                .exchange(request.getExchange())
+                .currencyPair(request.getCurrencyPair())
+                .symbol(request.getSymbol())
+                .quoteCurrency(request.getQuoteCurrency())
+                .tradingStyle(request.getTradingStyle())
+                .timestamp(request.getTimestamp())
+                .build();
+            
+            result.add(cardInfo);
+        }
+        
+        return result;
+    }
+    
+    // 카드 삭제 시 데이터 정리
+    public void removeCard(String cardId) {
+        latestAnalysisData.remove(cardId);
+        analysisRequests.remove(cardId);
+        subscribers.remove(cardId);
+    }
+}
+```
+
+### 3.2 AnalysisWebSocketHandler 수정
+
+```java
+// com.example.boot.web.websocket.handler.AnalysisWebSocketHandler.java
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class AnalysisWebSocketHandler extends TextWebSocketHandler {
+    
+    private final ObjectMapper objectMapper;
+    private final MarketAnalysisService marketAnalysisService;
+    private final AnalysisDataSharingService dataSharingService; // 추가
+    private final InfrastructureStatusController infraStatus;
+    private final Map<WebSocketSession, AnalysisRequest> activeAnalysis = new ConcurrentHashMap<>();
+    private final Map<WebSocketSession, Disposable> subscriptions = new ConcurrentHashMap<>();
+    
+    @Override
+    public void handleTextMessage(WebSocketSession session, TextMessage message) {
+        try {
+            // 메시지를 DTO 객체로 직접 변환
+            AnalysisRequest request = objectMapper.readValue(message.getPayload(), AnalysisRequest.class);
+            String action = request.getAction();
+            
+            if ("startAnalysis".equals(action)) {
+                // 인프라 상태 확인
+                var status = infraStatus.getStatus();
+                if (!status.isValid()) {
+                    sendErrorMessage(session, "Trading infrastructure is not ready. Please try again later.");
+                    return;
+                }
+                
+                // 분석 시작
+                log.info("Starting analysis for {}-{}, style: {}", 
+                         request.getExchange(), request.getCurrencyPair(), request.getTradingStyle());
+                
+                // 카드 ID 생성 (백엔드에서 생성)
+                String baseCardId = (request.getExchange() + "-" + request.getCurrencyPair()).toLowerCase();
+                String uuid = Long.toHexString(Double.doubleToLongBits(Math.random())).substring(0, 8);
+                String cardId = baseCardId + "-" + uuid;
+                long timestamp = System.currentTimeMillis();
+                
+                // 요청 객체에 카드 ID와 타임스탬프 설정
+                request.setCardId(cardId);
+                request.setTimestamp(timestamp);
+                
+                // 분석 요청 정보를 공유 서비스에 저장 (추가)
+                dataSharingService.saveAnalysisRequest(request);
+                
+                // 세션에 분석 요청 저장
+                activeAnalysis.put(session, request);
+                
+                // 분석 시작 로직
+                Disposable subscription = marketAnalysisService.startRealtimeAnalysis(request)
+                    .subscribe(
+                        analysisResponse -> {
+                            try {
+                                // 웹소켓으로 클라이언트에 전송
+                                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(analysisResponse)));
+                                
+                                // 공유 서비스에 데이터 업데이트 (추가)
+                                dataSharingService.updateAnalysisData(request.getCardId(), analysisResponse);
+                                
+                            } catch (IOException e) {
+                                log.error("Error sending analysis response", e);
+                            }
+                        },
+                        error -> log.error("Error in analysis subscription", error)
+                    );
+                
+                // 구독 정보 저장
+                subscriptions.put(session, subscription);
+                
+            } else if ("stopAnalysis".equals(action)) {
+                // 분석 중지
+                stopRealtimeAnalysis(session);
+            }
+            
+        } catch (Exception e) {
+            log.error("Error handling WebSocket message", e);
+            try {
+                sendErrorMessage(session, "Error processing request: " + e.getMessage());
+            } catch (IOException ex) {
+                log.error("Error sending error message", ex);
+            }
+        }
+    }
+    
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        log.info("WebSocket disconnected: {}", session.getId());
+        
+        // 분석 중지
+        stopRealtimeAnalysis(session);
+        
+        // 분석 중지 시 공유 서비스에서도 데이터 제거 (추가)
+        AnalysisRequest request = activeAnalysis.get(session);
+        if (request != null) {
+            dataSharingService.removeCard(request.getCardId());
+        }
+        
+        // 세션 정보 제거
+        activeAnalysis.remove(session);
+    }
+    
+    private void stopRealtimeAnalysis(WebSocketSession session) {
+        // 기존 코드...
+    }
+}
+```
+
+### 3.3 모의거래 서비스 구현
+
+```java
+// com.example.boot.exchange.layer7_trading.service.SimulTradingService.java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class SimulTradingService {
+    
+    private final AnalysisDataSharingService dataSharingService; // 공유 서비스 주입
+    private final SimulTradingWebSocketHandler webSocketHandler;
+    private final Map<String, SimulTradingSession> activeSessions = new ConcurrentHashMap<>();
+    
+    public String startSimulTrading(SimulTradingRequest request) {
+        String cardId = request.getCardId();
+        
+        // 이미 진행 중인 모의거래가 있는지 확인
+        if (activeSessions.containsKey(cardId)) {
+            log.info("Simul trading already running for card: {}. Stopping previous session.", cardId);
+            stopSimulTrading(cardId);
+        }
+        
+        // 카드가 존재하는지 확인
+        AnalysisResponse latestData = dataSharingService.getLatestAnalysisData(cardId);
+        if (latestData == null) {
+            throw new IllegalArgumentException("선택한 카드가 존재하지 않거나 분석이 진행 중이지 않습니다.");
+        }
+        
+        // 분석 요청 정보 가져오기
+        AnalysisRequest analysisRequest = dataSharingService.getAnalysisRequest(cardId);
+        if (analysisRequest == null) {
+            throw new IllegalArgumentException("선택한 카드의 분석 정보를 찾을 수 없습니다.");
+        }
+        
+        // 세션 ID 생성
+        String sessionId = UUID.randomUUID().toString();
+        
+        // 모의거래 세션 생성
+        SimulTradingSession session = SimulTradingSession.builder()
+            .sessionId(sessionId)
+            .cardId(cardId)
+            .exchange(analysisRequest.getExchange())
+            .currencyPair(analysisRequest.getCurrencyPair())
+            .symbol(analysisRequest.getSymbol())
+            .quoteCurrency(analysisRequest.getQuoteCurrency())
+            .initialBalance(request.getInitialBalance())
+            .currentBalance(request.getInitialBalance())
+            .signalThreshold(request.getSignalThreshold())
+            .takeProfitPercent(request.getTakeProfitPercent())
+            .stopLossPercent(request.getStopLossPercent())
+            .startTime(System.currentTimeMillis())
+            .status("RUNNING")
+            .holdingPosition(false)
+            .tradeHistory(new ArrayList<>())
+            .build();
+        
+        // 세션 저장
+        activeSessions.put(cardId, session);
+        
+        // 분석 데이터 구독
+        dataSharingService.subscribeToAnalysisData(cardId, analysisData -> 
+            processAnalysisUpdate(session, analysisData));
+        
+        // 초기 상태 브로드캐스트
+        broadcastSessionStatus(session);
+        
+        return sessionId;
+    }
+    
+    // 나머지 메서드들...
+}
+```
+
+## 5. 데이터 흐름 요약
+
+1. **분석 시작 및 카드 생성**:
+   - 프론트엔드에서 분석 시작 요청 전송
+   - `AnalysisWebSocketHandler`에서 카드 ID 생성
+   - 분석 요청 정보를 `AnalysisDataSharingService`에 저장
+   - `MarketAnalysisService`에서 분석 시작
+
+2. **분석 데이터 공유**:
+   - 분석 결과가 생성될 때마다 `AnalysisDataSharingService`에 저장
+   - 웹소켓을 통해 프론트엔드로 전송
+
+3. **모의거래 시작**:
+   - 프론트엔드에서 모의거래 시작 요청 전송
+   - `SimulTradingService`에서 카드 ID로 분석 데이터 조회
+   - 분석 데이터 구독 시작
+   - 모의거래 세션 생성 및 관리
+
+4. **모의거래 처리**:
+   - 분석 데이터 업데이트마다 매수/매도 신호 처리
+   - 거래 내역 생성 및 저장
+   - 웹소켓을 통해 프론트엔드로 거래 결과 전송
+
+## 6. 장점
+
+1. **기존 코드 최소 변경**: 핵심 로직은 그대로 유지하면서 데이터 공유 기능만 추가
+2. **데이터 중복 전송 방지**: 분석 데이터는 한 번만 생성되고, 모의거래 서비스는 이 데이터를 참조
+3. **관심사 분리**: 분석 데이터 처리와 모의거래 로직이 명확히 분리
+4. **확장성**: 향후 다른 서비스에서도 분석 데이터를 활용 가능
+
+## 7. 구현 일정 및 우선순위
+
+### 1주차: 기반 구조 구현
+- 단계 1: 분석 데이터 공유 서비스 구현 (기초) - 1일
+- 단계 2: AnalysisWebSocketHandler 연동 - 1일
+- 테스트 및 디버깅 - 1일
+
+### 2주차: 카드 목록 및 구독 기능 구현
+- 단계 3: 카드 목록 API 구현 - 1일
+- 단계 4: 구독 기능 구현 - 1일
+- 테스트 및 디버깅 - 1일
+
+### 3주차: 모의거래 기능 구현
+- 단계 5: 모의거래 기본 구조 구현 - 1일
+- 단계 6: 모의거래 로직 구현 - 2일
+- 테스트 및 디버깅 - 1일
+
+### 4주차: 프론트엔드 연동 및 최종 테스트
+- 단계 7: 프론트엔드 연동 - 2일
+- 통합 테스트 및 디버깅 - 2일
+- 최종 검토 및 문서화 - 1일
+
+## 8. 패키지 구조
+
+```
+com.example.boot
+├── config
+│   └── WebSocketConfig.java (웹소켓 설정 업데이트)
+│
+├── exchange
+│   ├── layer6_analysis
+│   │   ├── dto
+│   │   │   └── CardInfoDTO.java (카드 정보 DTO)
+│   │   │
+│   │   └── service
+│   │       ├── AnalysisDataSharingService.java (분석 데이터 공유 서비스)
+│   │       └── MarketAnalysisService.java (기존 분석 서비스)
+│   │
+│   └── layer7_trading
+│       ├── config
+│       │   └── SimulTradingConfig.java (모의거래 설정)
+│       │
+│       ├── controller
+│       │   └── SimulTradingController.java (모의거래 REST API)
+│       │
+│       ├── dto
+│       │   ├── SimulTradingRequest.java (모의거래 요청 DTO)
+│       │   └── SimulTradingResponse.java (모의거래 응답 DTO)
+│       │
+│       ├── model
+│       │   ├── SimulTradingSession.java (모의거래 세션 모델)
+│       │   └── TradeHistory.java (거래 내역 모델)
+│       │
+│       ├── service
+│       │   └── SimulTradingService.java (모의거래 서비스)
+│       │
+│       └── websocket
+│           └── SimulTradingWebSocketHandler.java (모의거래 웹소켓 핸들러)
+│
+└── web
+    └── websocket
+        └── handler
+            └── AnalysisWebSocketHandler.java (기존 분석 웹소켓 핸들러 수정)
+```
+
+### 패키지 설명
+
+1. **config**: 애플리케이션 설정 관련 클래스
+   - `WebSocketConfig.java`: 웹소켓 설정 (기존 코드 수정)
+
+2. **exchange.layer6_analysis**: 분석 관련 패키지
+   - **dto**: 데이터 전송 객체
+     - `CardInfoDTO.java`: 카드 정보 DTO (신규)
+   - **service**: 분석 서비스
+     - `AnalysisDataSharingService.java`: 분석 데이터 공유 서비스 (신규)
+     - `MarketAnalysisService.java`: 기존 분석 서비스 (변경 없음)
+
+3. **exchange.layer7_trading**: 모의거래 관련 패키지 (모두 신규)
+   - **config**: 모의거래 설정
+     - `SimulTradingConfig.java`: 모의거래 설정
+   - **controller**: REST API 컨트롤러
+     - `SimulTradingController.java`: 모의거래 REST API
+   - **dto**: 데이터 전송 객체
+     - `SimulTradingRequest.java`: 모의거래 요청 DTO
+     - `SimulTradingResponse.java`: 모의거래 응답 DTO
+   - **model**: 모델 클래스
+     - `SimulTradingSession.java`: 모의거래 세션 모델
+     - `TradeHistory.java`: 거래 내역 모델
+   - **service**: 서비스 클래스
+     - `SimulTradingService.java`: 모의거래 서비스
+   - **websocket**: 웹소켓 관련 클래스
+     - `SimulTradingWebSocketHandler.java`: 모의거래 웹소켓 핸들러
+
+4. **web.websocket.handler**: 웹소켓 핸들러
+   - `AnalysisWebSocketHandler.java`: 기존 분석 웹소켓 핸들러 (수정)
