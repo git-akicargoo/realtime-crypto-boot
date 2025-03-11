@@ -8,6 +8,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 import com.example.boot.web.websocket.handler.AnalysisWebSocketHandler;
 import com.example.boot.web.websocket.handler.FrontendWebSocketHandler;
+import com.example.boot.web.websocket.handler.SimulTradingWebSocketHandler;
 
 @Configuration
 @EnableWebSocket
@@ -18,6 +19,9 @@ public class FrontendWebSocketConfig implements WebSocketConfigurer {
     
     @Autowired
     private AnalysisWebSocketHandler analysisHandler;
+    
+    @Autowired
+    private SimulTradingWebSocketHandler simulTradingHandler;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
@@ -26,5 +30,8 @@ public class FrontendWebSocketConfig implements WebSocketConfigurer {
                
         registry.addHandler(analysisHandler, "/ws/analysis")
                .setAllowedOrigins("*");
+        
+        registry.addHandler(simulTradingHandler, "/ws/simul-trading")
+                .setAllowedOrigins("*");
     }
 } 

@@ -12,6 +12,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.example.boot.exchange.layer6_analysis.dto.AnalysisRequest;
 import com.example.boot.exchange.layer6_analysis.dto.AnalysisResponse;
+import com.example.boot.exchange.layer6_analysis.service.AnalysisDataSharingService;
 import com.example.boot.exchange.layer6_analysis.service.MarketAnalysisService;
 import com.example.boot.web.controller.InfrastructureStatusController;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +29,7 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final MarketAnalysisService marketAnalysisService;
     private final InfrastructureStatusController infraStatus;
+    private final AnalysisDataSharingService dataSharingService;
     private final Map<WebSocketSession, AnalysisRequest> activeAnalysis = new ConcurrentHashMap<>();
     private final Map<WebSocketSession, Disposable> subscriptions = new ConcurrentHashMap<>();
 
@@ -76,6 +78,9 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
                 
                 // 기존 분석 저장
         activeAnalysis.put(session, request);
+
+                // 추가: 분석 요청 정보를 공유 서비스에 저장
+                dataSharingService.saveAnalysisRequest(request);
 
                 // 분석 시작 및 응답 구독
                 Flux<AnalysisResponse> flux = marketAnalysisService.startRealtimeAnalysis(request);
@@ -127,6 +132,9 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
                             log.info("프론트엔드로 전송되는 응답 타임스탬프: {}", responseWithCardInfo.getTimestamp());
                             
                             session.sendMessage(new TextMessage(responseJson));
+                            
+                            // 추가: 공유 서비스에 데이터 업데이트
+                            dataSharingService.updateAnalysisData(cardId, responseWithCardInfo);
                         } catch (Exception e) {
                             log.error("Error sending analysis response", e);
                         }
@@ -170,6 +178,9 @@ public class AnalysisWebSocketHandler extends TextWebSocketHandler {
         AnalysisRequest request = activeAnalysis.remove(session);
         if (request != null) {
             marketAnalysisService.stopRealtimeAnalysis(request);
+            
+            // 추가: 공유 서비스에서 데이터 제거
+            dataSharingService.removeCard(request.getCardId());
         }
     }
 

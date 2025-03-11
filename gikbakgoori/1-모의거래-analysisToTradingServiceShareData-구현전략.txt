@@ -553,3 +553,463 @@ com.example.boot
 
 4. **web.websocket.handler**: 웹소켓 핸들러
    - `AnalysisWebSocketHandler.java`: 기존 분석 웹소켓 핸들러 (수정)
+```
+
+## 9. 모의거래 상세 흐름 및 구현 전략
+
+### 9.1 모의거래 기본 흐름
+
+1. **분석 시작 및 카드 생성**:
+   - 사용자가 분석 시작 버튼을 클릭하면 웹소켓을 통해 분석 요청이 전송됩니다.
+   - 백엔드에서 카드 ID를 생성하고 분석을 시작합니다.
+   - 분석 결과가 실시간으로 프론트엔드에 전송되고 카드가 화면에 표시됩니다.
+
+2. **모의거래 설정 및 시작**:
+   - 사용자가 모의거래 섹션에서 카드를 선택합니다.
+   - 매수 신호 기준값(%), 익절 기준(%), 손절 기준(%)을 설정합니다.
+   - "자동 거래 시작" 버튼을 클릭하면 모의거래가 시작됩니다.
+
+3. **모의거래 진행**:
+   - 선택한 카드의 실시간 분석 데이터를 기반으로 모의거래가 진행됩니다.
+   - 매수 신호 강도가 설정한 기준값 이상이면 매수 처리됩니다.
+   - 매수 후 가격이 익절 기준에 도달하면 익절, 손절 기준에 도달하면 손절 처리됩니다.
+   - 각 거래는 10만원씩 사용하며, 총 10건의 거래를 순차적으로 진행합니다.
+   - 1건의 거래가 완료(매도)된 후 다음 거래를 시작합니다.
+
+4. **결과 표시**:
+   - 각 거래의 진행 상황과 결과가 실시간으로 프론트엔드에 표시됩니다.
+   - 모든 거래(10건)가 완료되면 총 수익률, 승률, 평균 수익률 등의 요약 정보가 표시됩니다.
+
+### 9.2 구현 보완 사항
+
+현재 구현된 코드에서 다음 사항을 보완해야 합니다:
+
+1. **거래 건수 제한 및 순차 진행**:
+   ```java
+   // SimulTradingSession 클래스에 필드 추가
+   private int maxTrades = 10; // 최대 거래 건수
+   private boolean waitingForNextTrade = false; // 다음 거래 대기 상태
+   
+   // SimulTradingService 클래스의 checkBuySignal 메서드 수정
+   private void checkBuySignal(SimulTradingSession session, AnalysisResponse analysisData) {
+       // 이미 최대 거래 건수에 도달했거나 다음 거래 대기 중이면 처리하지 않음
+       if (session.getTotalTrades() >= session.getMaxTrades() || session.isWaitingForNextTrade()) {
+           return;
+       }
+       
+       // 매수 신호 강도
+       double buySignalStrength = analysisData.getBuySignalStrength();
+       
+       // 매수 신호 기준값 이상이면 매수
+       if (buySignalStrength >= session.getSignalThreshold()) {
+           // 현재 가격
+           BigDecimal currentPrice = new BigDecimal(analysisData.getCurrentPrice());
+           
+           // 매수 처리
+           executeBuy(session, currentPrice, buySignalStrength);
+           
+           // 다음 거래 대기 상태로 설정
+           session.setWaitingForNextTrade(true);
+       }
+   }
+   
+   // SimulTradingService 클래스의 executeSell 메서드 수정
+   private void executeSell(SimulTradingSession session, BigDecimal price, String reason) {
+       // ... 기존 코드 ...
+       
+       // 다음 거래 대기 상태 해제
+       session.setWaitingForNextTrade(false);
+       
+       // 모든 거래가 완료되었는지 확인
+       if (session.getTotalTrades() >= session.getMaxTrades()) {
+           // 모의거래 완료 처리
+           completeSimulTrading(session);
+       }
+   }
+   
+   // 모의거래 완료 처리 메서드 추가
+   private void completeSimulTrading(SimulTradingSession session) {
+       session.setStatus("COMPLETED");
+       session.setLastUpdateTime(System.currentTimeMillis());
+       
+       // 최종 결과 브로드캐스트
+       SimulTradingResponse response = createResponse(session);
+       webSocketHandler.broadcastUpdate(session.getSessionId(), response);
+   }
+   ```
+
+2. **거래 금액 설정**:
+   ```java
+   // SimulTradingService 클래스의 executeBuy 메서드 수정
+   private void executeBuy(SimulTradingSession session, BigDecimal price, double signalStrength) {
+       // ... 기존 코드 ...
+       
+       // 매수 금액 (10만원 고정)
+       BigDecimal buyAmount = new BigDecimal("100000");
+       
+       // 현재 잔액이 매수 금액보다 작으면 처리하지 않음
+       if (session.getCurrentBalance().compareTo(buyAmount) < 0) {
+           log.warn("잔액 부족: 필요={}, 현재={}", buyAmount, session.getCurrentBalance());
+           return;
+       }
+       
+       // 매수 수량
+       BigDecimal quantity = buyAmount.divide(price, 8, RoundingMode.HALF_UP);
+       
+       // ... 기존 코드 ...
+       
+       // 잔액 업데이트
+       session.setCurrentBalance(session.getCurrentBalance().subtract(buyAmount));
+   }
+   ```
+
+3. **최종 결과 요약 정보 추가**:
+   ```java
+   // SimulTradingResponse 클래스에 필드 추가
+   private int completedTrades; // 완료된 거래 건수
+   private double winRate; // 승률
+   private double averageProfitPercent; // 평균 수익률
+   private double maxProfitPercent; // 최대 수익률
+   private double maxLossPercent; // 최대 손실률
+   
+   // SimulTradingService 클래스의 createResponse 메서드 수정
+   private SimulTradingResponse createResponse(SimulTradingSession session) {
+       // ... 기존 코드 ...
+       
+       // 승률 계산
+       double winRate = 0;
+       if (session.getTotalTrades() > 0) {
+           winRate = (double) session.getWinTrades() / session.getTotalTrades() * 100;
+       }
+       
+       // 평균 수익률, 최대 수익률, 최대 손실률 계산
+       double averageProfitPercent = 0;
+       double maxProfitPercent = 0;
+       double maxLossPercent = 0;
+       
+       if (!session.getTradeHistory().isEmpty()) {
+           double totalProfitPercent = 0;
+           
+           for (TradeHistory trade : session.getTradeHistory()) {
+               if ("SELL".equals(trade.getType())) {
+                   double profitPercent = trade.getProfitPercent();
+                   totalProfitPercent += profitPercent;
+                   
+                   if (profitPercent > maxProfitPercent) {
+                       maxProfitPercent = profitPercent;
+                   }
+                   
+                   if (profitPercent < maxLossPercent) {
+                       maxLossPercent = profitPercent;
+                   }
+               }
+           }
+           
+           averageProfitPercent = totalProfitPercent / session.getTotalTrades();
+       }
+       
+       // 응답 생성
+       return SimulTradingResponse.builder()
+           // ... 기존 코드 ...
+           .completedTrades(session.getTotalTrades())
+           .winRate(winRate)
+           .averageProfitPercent(averageProfitPercent)
+           .maxProfitPercent(maxProfitPercent)
+           .maxLossPercent(maxLossPercent)
+           .build();
+   }
+   ```
+
+### 9.3 프론트엔드 구현 전략
+
+프론트엔드에서는 다음과 같은 기능을 구현해야 합니다:
+
+1. **카드 목록 조회 및 선택**:
+   - 백엔드 API를 호출하여 활성 카드 목록을 조회합니다.
+   - 드롭다운에 카드 목록을 표시하고 사용자가 선택할 수 있도록 합니다.
+
+2. **모의거래 설정**:
+   - 매수 신호 기준값, 익절 기준, 손절 기준을 설정할 수 있는 UI를 제공합니다.
+   - 기본값은 각각 50%, 5%, 3%로 설정합니다.
+
+3. **모의거래 시작/중지**:
+   - "자동 거래 시작" 버튼을 클릭하면 웹소켓을 통해 모의거래 시작 요청을 전송합니다.
+   - "거래 중지" 버튼을 클릭하면 웹소켓을 통해 모의거래 중지 요청을 전송합니다.
+
+4. **거래 내역 표시**:
+   - 웹소켓을 통해 수신한 거래 내역을 테이블에 실시간으로 표시합니다.
+   - 각 거래의 유형(매수/매도), 가격, 수량, 총액, 수익률 등을 표시합니다.
+
+5. **결과 요약 표시**:
+   - 모든 거래가 완료되면 총 수익률, 승률, 평균 수익률 등의 요약 정보를 표시합니다.
+   - 차트를 통해 수익률 추이를 시각적으로 표시합니다.
+
+이러한 보완 사항을 구현하면 사용자가 분석 카드를 선택하고 모의거래를 시작하여 10건의 거래를 순차적으로 진행하고 결과를 확인할 수 있는 완전한 모의거래 기능이 구현될 것입니다.
+
+## 10. 이벤트 기반 아키텍처로의 전환
+
+### 10.1 순환 참조 문제 발생
+
+초기 구현 과정에서 다음과 같은 순환 참조 문제가 발생했습니다:
+
+1. **문제 상황**:
+   - `SimulTradingService`는 모의거래 로직을 처리하고 결과를 클라이언트에게 전송해야 합니다.
+   - `SimulTradingWebSocketHandler`는 클라이언트 요청을 받아 `SimulTradingService`를 호출합니다.
+   - 초기 설계에서는 `SimulTradingService`가 직접 `SimulTradingWebSocketHandler`를 참조하여 클라이언트에게 메시지를 전송하도록 했습니다:
+   
+   ```java
+   @Service
+   @RequiredArgsConstructor
+   public class SimulTradingService {
+       private final SimulTradingWebSocketHandler webSocketHandler;
+       // ...
+       
+       private void broadcastSessionStatus(SimulTradingSession session) {
+           SimulTradingResponse response = createResponse(session);
+           webSocketHandler.broadcastUpdate(session.getSessionId(), response);
+       }
+   }
+   ```
+   
+   - 이로 인해 `SimulTradingService` ↔ `SimulTradingWebSocketHandler` 간의 순환 참조가 발생했습니다.
+   - Spring 애플리케이션 시작 시 다음과 같은 오류가 발생했습니다:
+   
+   ```
+   Error creating bean with name 'simulTradingService': Requested bean is currently in creation: Is there an unresolvable circular reference?
+   ```
+
+2. **임시 해결책 시도**:
+   - `ApplicationContextProvider`를 사용하여 Bean을 수동으로 가져오는 방식을 시도했습니다:
+   
+   ```java
+   @Component
+   public class ApplicationContextProvider implements ApplicationContextAware {
+       private static ApplicationContext applicationContext;
+       
+       @Override
+       public void setApplicationContext(ApplicationContext ctx) {
+           applicationContext = ctx;
+       }
+       
+       public static <T> T getBean(Class<T> beanClass) {
+           return applicationContext.getBean(beanClass);
+       }
+   }
+   ```
+   
+   - 이 방식은 작동했지만, 코드의 가독성과 유지보수성이 저하되는 문제가 있었습니다.
+   - 또한 Bean 생명주기 관리가 복잡해지고, 테스트가 어려워지는 단점이 있었습니다.
+
+### 10.2 이벤트 기반 아키텍처로의 전환
+
+순환 참조 문제를 근본적으로 해결하기 위해 이벤트 기반 아키텍처로 전환했습니다:
+
+1. **이벤트 클래스 생성**:
+   ```java
+   public class SimulTradingUpdateEvent extends ApplicationEvent {
+       private static final long serialVersionUID = 1L;
+       private final String sessionId;
+       private final SimulTradingResponse response;
+       
+       public SimulTradingUpdateEvent(Object source, String sessionId, SimulTradingResponse response) {
+           super(source);
+           this.sessionId = sessionId;
+           this.response = response;
+       }
+       
+       // Getters...
+   }
+   ```
+
+2. **이벤트 발행 로직 구현**:
+   ```java
+   @Service
+   @RequiredArgsConstructor
+   public class SimulTradingService {
+       private final ApplicationEventPublisher eventPublisher;
+       // ...
+       
+       private void publishUpdateEvent(String sessionId, SimulTradingResponse response) {
+           SimulTradingUpdateEvent event = new SimulTradingUpdateEvent(this, sessionId, response);
+           eventPublisher.publishEvent(event);
+       }
+       
+       // 기존의 broadcastSessionStatus 메서드를 이벤트 발행으로 대체
+       private void broadcastSessionStatus(SimulTradingSession session) {
+           SimulTradingResponse response = createResponse(session);
+           publishUpdateEvent(session.getSessionId(), response);
+       }
+   }
+   ```
+
+3. **이벤트 리스너 구현**:
+   ```java
+   @Component
+   @RequiredArgsConstructor
+   public class SimulTradingWebSocketHandler extends TextWebSocketHandler {
+       // ...
+       
+       @EventListener
+       public void handleSimulTradingUpdateEvent(SimulTradingUpdateEvent event) {
+           // 이벤트에 해당하는 세션 찾기
+           sessionMap.forEach((session, sessionId) -> {
+               if (sessionId.equals(event.getSessionId())) {
+                   // 업데이트 메시지 전송
+                   sendMessage(session, event.getResponse());
+               }
+           });
+       }
+   }
+   ```
+
+### 10.3 이벤트 기반 아키텍처의 장점
+
+1. **순환 참조 문제 해결**:
+   - `SimulTradingService`는 `SimulTradingWebSocketHandler`에 직접 의존하지 않습니다.
+   - `SimulTradingWebSocketHandler`는 여전히 `SimulTradingService`에 의존하지만, 역방향 의존성은 제거되었습니다.
+   - 이벤트를 통한 간접적인 통신으로 순환 참조 문제가 해결되었습니다.
+
+2. **느슨한 결합(Loose Coupling)**:
+   - 서비스와 웹소켓 핸들러 간의 결합도가 낮아졌습니다.
+   - 각 컴포넌트는 자신의 책임에만 집중할 수 있습니다.
+   - `SimulTradingService`는 비즈니스 로직에만 집중하고, 이벤트를 발행합니다.
+   - `SimulTradingWebSocketHandler`는 클라이언트 통신에만 집중하고, 이벤트를 구독합니다.
+
+3. **실시간 업데이트 처리 개선**:
+   - 모의 거래는 지속적으로 진행되며, 가격 변동, 거래 실행, 수익률 변화 등의 업데이트가 발생합니다.
+   - 이벤트 기반 아키텍처는 이러한 비동기적 업데이트를 효과적으로 처리할 수 있습니다.
+   - 여러 클라이언트에게 동시에 업데이트를 전송하는 것이 용이해졌습니다.
+
+4. **확장성 향상**:
+   - 새로운 이벤트 리스너를 추가하여 기능을 확장하기 쉬워졌습니다.
+   - 예를 들어, 모의거래 결과를 데이터베이스에 저장하는 리스너를 추가할 수 있습니다.
+   - 모니터링, 로깅 등의 부가 기능을 이벤트 리스너로 구현할 수 있습니다.
+
+### 10.4 패키지 구조 변경
+
+이벤트 기반 아키텍처로 전환하면서 패키지 구조도 개선했습니다:
+
+1. **SimulTradingWebSocketHandler 위치 변경**:
+   - 기존: `com.example.boot.exchange.layer7_trading.websocket`
+   - 변경: `com.example.boot.web.websocket.handler`
+   
+   이 변경으로 모든 웹소켓 핸들러가 동일한 패키지에 위치하게 되어 일관성이 향상되었습니다.
+
+2. **이벤트 패키지 추가**:
+   - 새로운 패키지: `com.example.boot.exchange.layer7_trading.event`
+   - 이 패키지에 `SimulTradingUpdateEvent` 클래스를 추가했습니다.
+
+3. **불필요한 설정 파일 제거**:
+   - `SimulTradingConfig` 파일을 제거하여 코드를 간소화했습니다.
+   - 대신 `FrontendWebSocketConfig`에서 직접 `SimulTradingWebSocketHandler`를 등록했습니다.
+
+### 10.5 최종 구현 코드
+
+1. **SimulTradingUpdateEvent**:
+   ```java
+   package com.example.boot.exchange.layer7_trading.event;
+   
+   import org.springframework.context.ApplicationEvent;
+   import com.example.boot.exchange.layer7_trading.dto.SimulTradingResponse;
+   
+   public class SimulTradingUpdateEvent extends ApplicationEvent {
+       private static final long serialVersionUID = 1L;
+       private final String sessionId;
+       private final SimulTradingResponse response;
+       
+       public SimulTradingUpdateEvent(Object source, String sessionId, SimulTradingResponse response) {
+           super(source);
+           this.sessionId = sessionId;
+           this.response = response;
+       }
+       
+       public String getSessionId() {
+           return sessionId;
+       }
+       
+       public SimulTradingResponse getResponse() {
+           return response;
+       }
+   }
+   ```
+
+2. **SimulTradingService (이벤트 발행 부분)**:
+   ```java
+   @Service
+   @RequiredArgsConstructor
+   public class SimulTradingService {
+       private final ApplicationEventPublisher eventPublisher;
+       // ...
+       
+       private void publishUpdateEvent(String sessionId, SimulTradingResponse response) {
+           SimulTradingUpdateEvent event = new SimulTradingUpdateEvent(this, sessionId, response);
+           eventPublisher.publishEvent(event);
+       }
+       
+       // 모의거래 상태 업데이트 시 이벤트 발행
+       private void updateSessionStatus(SimulTradingSession session) {
+           SimulTradingResponse response = createResponse(session);
+           publishUpdateEvent(session.getSessionId(), response);
+       }
+       
+       // 매수 실행 후 이벤트 발행
+       private void executeBuy(SimulTradingSession session, BigDecimal price, double signalStrength) {
+           // ... 매수 로직 ...
+           
+           // 상태 업데이트 및 이벤트 발행
+           updateSessionStatus(session);
+       }
+       
+       // 매도 실행 후 이벤트 발행
+       private void executeSell(SimulTradingSession session, BigDecimal price, String reason) {
+           // ... 매도 로직 ...
+           
+           // 상태 업데이트 및 이벤트 발행
+           updateSessionStatus(session);
+       }
+   }
+   ```
+
+3. **SimulTradingWebSocketHandler (이벤트 리스너 부분)**:
+   ```java
+   @Slf4j
+   @Component
+   @RequiredArgsConstructor
+   public class SimulTradingWebSocketHandler extends TextWebSocketHandler {
+       // ...
+       
+       @EventListener
+       public void handleSimulTradingUpdateEvent(SimulTradingUpdateEvent event) {
+           // 이벤트에 해당하는 세션 찾기
+           sessionMap.forEach((session, sessionId) -> {
+               if (sessionId.equals(event.getSessionId())) {
+                   // 업데이트 메시지 전송
+                   sendMessage(session, event.getResponse());
+               }
+           });
+       }
+       
+       // 메시지 전송 메서드
+       public void sendMessage(WebSocketSession session, Object data) {
+           try {
+               if (session.isOpen()) {
+                   String jsonMessage = objectMapper.writeValueAsString(data);
+                   session.sendMessage(new TextMessage(jsonMessage));
+               }
+           } catch (Exception e) {
+               log.error("웹소켓 메시지 전송 오류", e);
+           }
+       }
+   }
+   ```
+
+### 10.6 결론
+
+이벤트 기반 아키텍처로의 전환을 통해 다음과 같은 개선을 이루었습니다:
+
+1. **순환 참조 문제 해결**: 직접적인 의존성 대신 이벤트를 통한 간접적인 통신을 사용하여 순환 참조 문제를 해결했습니다.
+2. **코드 구조 개선**: 관심사를 분리하여 코드의 가독성과 유지보수성을 향상시켰습니다.
+3. **확장성 향상**: 새로운 기능을 이벤트 리스너로 쉽게 추가할 수 있게 되었습니다.
+4. **실시간 업데이트 처리 개선**: 비동기적 업데이트를 효과적으로 처리할 수 있게 되었습니다.
+
+이러한 개선을 통해 모의거래 기능이 안정적으로 동작하고, 코드의 품질이 향상되었습니다. 또한 향후 기능 확장이 용이해졌습니다.

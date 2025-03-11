@@ -11,7 +11,8 @@ const SimulTradingService = (function() {
         isTrading: false,
         trades: [],
         totalTrades: 0,
-        profitPercent: 0
+        profitPercent: 0,
+        cardList: [] // 백엔드에서 가져온 카드 목록
     };
     
     // 웹소켓 연결
@@ -21,43 +22,51 @@ const SimulTradingService = (function() {
     function init() {
         console.log('모의거래 서비스 초기화');
         setupEventListeners();
-        updateCardSelector();
+        // 페이지 로드 시 초기 카드 목록 가져오기
+        fetchCardList();
     }
     
     // 이벤트 리스너 설정
     function setupEventListeners() {
-        // 카드 선택 드롭다운 이벤트
+        // 카드 선택 이벤트
         const cardSelector = document.getElementById('cardSelector');
         if (cardSelector) {
+            // 셀렉트 박스 클릭 시 카드 목록 가져오기
+            cardSelector.addEventListener('click', function(event) {
+                // 이미 옵션이 로드되어 있고, 첫 번째 옵션 외에 다른 옵션이 있으면 다시 로드하지 않음
+                if (this.options.length <= 1) {
+                    fetchCardList();
+                }
+            });
+            
             cardSelector.addEventListener('change', handleCardSelection);
         }
         
-        // 매수 신호 기준값 버튼 이벤트
+        // 신호 기준값 버튼 이벤트
         const signalButtons = document.querySelectorAll('.signal-btn');
         signalButtons.forEach(button => {
             button.addEventListener('click', handleSignalButtonClick);
         });
         
+        // 모의거래 시작 버튼 이벤트
+        const startButton = document.getElementById('startSimulTrading');
+        if (startButton) {
+            startButton.addEventListener('click', startSimulTrading);
+        }
+        
         // 익절/손절 기준 입력 이벤트
         const takeProfitInput = document.getElementById('takeProfitPercent');
-        const stopLossInput = document.getElementById('stopLossPercent');
-        
         if (takeProfitInput) {
             takeProfitInput.addEventListener('change', function() {
                 state.takeProfitPercent = parseFloat(this.value);
             });
         }
         
+        const stopLossInput = document.getElementById('stopLossPercent');
         if (stopLossInput) {
             stopLossInput.addEventListener('change', function() {
                 state.stopLossPercent = parseFloat(this.value);
             });
-        }
-        
-        // 자동 거래 시작 버튼 이벤트
-        const startButton = document.getElementById('startSimulTrading');
-        if (startButton) {
-            startButton.addEventListener('click', startSimulTrading);
         }
         
         // 카드 생성/삭제 이벤트 감지하여 카드 선택기 업데이트
@@ -68,13 +77,75 @@ const SimulTradingService = (function() {
     // 카드 선택 핸들러
     function handleCardSelection(event) {
         const cardId = event.target.value;
+        
         if (!cardId) {
-            state.selectedCard = null;
             clearSelectedCardInfo();
             return;
         }
         
-        // 선택된 카드 정보 가져오기
+        // 선택된 카드 정보 저장
+        state.selectedCard = cardId;
+        document.getElementById('selectedCardId').value = cardId;
+        
+        // 시작 버튼 활성화
+        const startButton = document.getElementById('startSimulTrading');
+        if (startButton) {
+            startButton.disabled = false;
+        }
+        
+        // 선택된 카드의 최신 분석 결과 가져오기
+        fetchLatestAnalysisResult(cardId);
+    }
+    
+    // 백엔드에서 최신 분석 결과 가져오기
+    function fetchLatestAnalysisResult(cardId) {
+        console.log('백엔드에서 카드 ID:', cardId, '의 최신 분석 결과 가져오기');
+        
+        fetch(`/api/v1/simulation/cards/${cardId}/latest`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('최신 분석 결과를 가져오는데 실패했습니다.');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('백엔드에서 가져온 최신 분석 결과:', data);
+                updateSelectedCardInfo(cardId, data);
+            })
+            .catch(error => {
+                console.error('최신 분석 결과 가져오기 오류:', error);
+                // 백엔드 API 호출 실패 시 프론트엔드 상태에서 카드 정보 가져오기
+                fallbackToFrontendCardInfo(cardId);
+            });
+    }
+    
+    // 백엔드에서 가져온 분석 결과로 선택된 카드 정보 업데이트
+    function updateSelectedCardInfo(cardId, analysisData) {
+        // 상태 업데이트
+        state.selectedCard = {
+            cardId: cardId,
+            exchange: analysisData.exchange,
+            symbol: analysisData.symbol,
+            quoteCurrency: analysisData.quoteCurrency,
+            currencyPair: analysisData.currencyPair,
+            currentPrice: analysisData.currentPrice,
+            buySignalStrength: analysisData.buySignalStrength,
+            reboundProbability: analysisData.reboundProbability,
+            marketCondition: analysisData.marketCondition
+        };
+        
+        // 히든 필드에 카드 정보 저장
+        document.getElementById('selectedCardId').value = cardId;
+        document.getElementById('selectedCardExchange').value = analysisData.exchange || '';
+        document.getElementById('selectedCardCurrencyPair').value = analysisData.currencyPair || '';
+        
+        console.log('백엔드에서 카드 정보 업데이트됨:', cardId, state.selectedCard);
+    }
+    
+    // 프론트엔드 상태에서 카드 정보 가져오기 (백업 방법)
+    function fallbackToFrontendCardInfo(cardId) {
+        console.log('프론트엔드 상태에서 카드 정보 가져오기 시도:', cardId);
+        
         if (window.state && window.state.activeCards && window.state.activeCards[cardId]) {
             const cardInfo = window.state.activeCards[cardId];
             state.selectedCard = cardInfo;
@@ -85,7 +156,7 @@ const SimulTradingService = (function() {
             document.getElementById('selectedCardExchange').value = cardInfo.exchange || '';
             document.getElementById('selectedCardCurrencyPair').value = cardInfo.currencyPair || '';
             
-            console.log('카드 선택됨:', cardId, cardInfo);
+            console.log('프론트엔드에서 카드 정보 가져옴:', cardId, cardInfo);
         } else {
             console.error('선택된 카드 정보를 찾을 수 없음:', cardId);
             state.selectedCard = null;
@@ -118,7 +189,90 @@ const SimulTradingService = (function() {
         console.log('매수 신호 기준값 설정:', value);
     }
     
-    // 카드 선택기 업데이트
+    // 카드 목록 가져오기
+    function fetchCardList() {
+        return fetch('/api/v1/simulation/cards')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('카드 목록을 가져오는데 실패했습니다.');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // 카드 목록 저장
+                state.cardList = data;
+                
+                // 카드 선택기 업데이트
+                updateCardSelectorFromBackend();
+                
+                return data;
+            })
+            .catch(error => {
+                console.error('카드 목록 조회 오류:', error);
+                // 오류 발생 시 빈 카드 목록으로 업데이트
+                updateCardSelector([]);
+                showAlert('분석 카드 목록을 가져오지 못했습니다.');
+                
+                return [];
+            });
+    }
+    
+    // 백엔드에서 가져온 카드 목록으로 선택기 업데이트
+    function updateCardSelectorFromBackend() {
+        const cardSelector = document.getElementById('cardSelector');
+        const noCardsMessage = document.getElementById('noCardsMessage');
+        
+        if (!cardSelector) return;
+        
+        // 현재 선택된 값 저장
+        const currentValue = cardSelector.value;
+        
+        // 기존 옵션 제거 (첫 번째 옵션 제외)
+        while (cardSelector.options.length > 1) {
+            cardSelector.remove(1);
+        }
+        
+        // 카드가 없는 경우 메시지 표시
+        if (state.cardList.length === 0) {
+            if (noCardsMessage) {
+                noCardsMessage.style.display = 'block';
+            }
+            
+            // 시작 버튼 비활성화
+            const startButton = document.getElementById('startSimulTrading');
+            if (startButton) {
+                startButton.disabled = true;
+            }
+            
+            return;
+        } else {
+            if (noCardsMessage) {
+                noCardsMessage.style.display = 'none';
+            }
+        }
+        
+        // 카드 목록 추가
+        state.cardList.forEach(card => {
+            const option = document.createElement('option');
+            option.value = card.cardId;
+            
+            // 카드 정보 포맷팅
+            const timestamp = new Date(card.timestamp).toLocaleTimeString();
+            option.textContent = `${card.exchange} - ${card.currencyPair} (${timestamp}) [ID: ${card.cardId}]`;
+            
+            cardSelector.appendChild(option);
+        });
+        
+        // 이전에 선택된 값이 있으면 복원
+        if (currentValue && state.cardList.some(card => card.cardId === currentValue)) {
+            cardSelector.value = currentValue;
+        } else {
+            cardSelector.selectedIndex = 0;
+            clearSelectedCardInfo();
+        }
+    }
+    
+    // 카드 선택기 업데이트 (프론트엔드 상태 기반)
     function updateCardSelector() {
         const cardSelector = document.getElementById('cardSelector');
         if (!cardSelector) return;

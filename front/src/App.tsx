@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Navigation from './components/Navigation'
 import SystemStatus from './components/SystemStatus'
+import SimulTrading from './components/SimulTrading'
+import SimulTradingResults from './components/SimulTradingResults'
 
 export default function App() {
   return (
@@ -41,6 +43,24 @@ export default function App() {
               backgroundColor: 'var(--bg-primary)'
             }}
           />
+        } />
+        <Route path="/simul-trading/:cardId" element={
+          <div style={{ 
+            marginTop: '84px', 
+            padding: '20px',
+            backgroundColor: 'var(--bg-primary)'
+          }}>
+            <SimulTrading cardId={window.location.pathname.split('/').pop() || ''} />
+          </div>
+        } />
+        <Route path="/simul-results/:cardId" element={
+          <div style={{ 
+            marginTop: '84px', 
+            padding: '20px',
+            backgroundColor: 'var(--bg-primary)'
+          }}>
+            <SimulTradingResults cardId={window.location.pathname.split('/').pop() || ''} />
+          </div>
         } />
         <Route path="/" element={
           <div style={{ 
