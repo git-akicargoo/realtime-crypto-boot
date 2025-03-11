@@ -518,27 +518,22 @@ function startNewAnalysis() {
     // 표시 통화쌍 설정
     const displayPair = exchange === 'UPBIT' ? currencyPair : `${symbol}/${quoteCurrency}`;
     
-    // 카드 생성
-    const card = CardComponent.createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
+    // 카드 생성 및 이벤트 발생
+    const card = createCardAndDispatchEvent(exchange, currencyPair, symbol, quoteCurrency, displayPair);
     
-    // 카드 ID 가져오기 (이제 UUID가 포함된 고유 ID)
-    const cardId = card.id;
+    // 추가 정보 저장
+    state.activeCards[card.id].tradingStyle = tradingStyle;
+    state.activeCards[card.id].active = false;
     
-    // 카드 컨테이너에 추가
-    document.getElementById('cardsContainer').appendChild(card);
+    console.log('새 분석 카드 추가:', card.id, state.activeCards[card.id]);
     
-    // 활성 카드 목록에 추가
-    state.activeCards[cardId] = {
-        exchange,
-        currencyPair,
-        symbol,
-        quoteCurrency,
-        element: card,
-        tradingStyle,
-        active: false
-    };
+    // 중요: 웹소켓 메시지 콜백 등록 - 반드시 startAnalysis 전에 호출
+    WebSocketService.onMessage(card.id, function(data) {
+        CardComponent.updateCard(card, data);
+    });
     
-    console.log('새 분석 카드 추가:', cardId, state.activeCards[cardId]);
+    // 분석 시작
+    WebSocketService.startAnalysis(exchange, currencyPair, symbol, quoteCurrency, card, tradingStyle);
 }
 
 function initializeTheme() {
@@ -615,6 +610,32 @@ function showCustomAlert(message) {
     });
 }
 
+// 카드 생성 후 이벤트 발생
+function createCardAndDispatchEvent(exchange, currencyPair, symbol, quoteCurrency, displayPair) {
+    // 카드 생성
+    const card = CardComponent.createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
+    
+    // 카드 정보 저장
+    state.activeCards[card.id] = {
+        exchange: exchange,
+        currencyPair: currencyPair,
+        symbol: symbol,
+        quoteCurrency: quoteCurrency,
+        baseId: `${exchange}-${quoteCurrency}-${symbol}`.toLowerCase(),
+        card: card
+    };
+    
+    // 카드를 DOM에 추가
+    document.getElementById('cardsContainer').appendChild(card);
+    
+    // 카드 생성 이벤트 발생
+    document.dispatchEvent(new CustomEvent('cardCreated', {
+        detail: { cardId: card.id }
+    }));
+    
+    return card;
+}
+
 // 카드 삭제 함수
 function deleteCard(cardId) {
     console.log('카드 삭제 요청:', cardId);
@@ -644,6 +665,11 @@ function deleteCard(cardId) {
     
     // 상태에서 제거
     delete state.activeCards[cardId];
+    
+    // 카드 삭제 이벤트 발생
+    document.dispatchEvent(new CustomEvent('cardDeleted', {
+        detail: { cardId: cardId }
+    }));
     
     console.log('카드 삭제 완료:', cardId);
 }

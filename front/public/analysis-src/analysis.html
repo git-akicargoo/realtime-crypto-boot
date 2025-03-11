@@ -62,6 +62,104 @@
                 <div class="analysis-cards-container" id="cardsContainer"></div>
             </div>
         </div>
+        
+        <!-- 모의거래 영역 추가 -->
+        <div class="content-wrapper full-width">
+            <div class="analysis-section">
+                <h2>모의거래 시뮬레이션</h2>
+                <div class="form-container">
+                    <div class="form-group">
+                        <label for="cardSelector">분석 카드 선택</label>
+                        <select id="cardSelector">
+                            <option value="">카드 선택</option>
+                            <!-- 활성화된 카드 목록이 여기에 동적으로 추가됩니다 -->
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>초기 잔액</label>
+                        <div class="static-value">1,000,000 KRW</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>매수 신호 기준값</label>
+                        <div class="button-group">
+                            <button class="btn signal-btn" data-value="30">30%</button>
+                            <button class="btn signal-btn active" data-value="50">50%</button>
+                            <button class="btn signal-btn" data-value="70">70%</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group trading-limits">
+                        <div class="limit-input">
+                            <label for="takeProfitPercent">익절 기준 (%)</label>
+                            <input type="number" id="takeProfitPercent" value="0.1" min="0.1" max="100" step="0.1">
+                        </div>
+                        <div class="limit-input">
+                            <label for="stopLossPercent">손절 기준 (%)</label>
+                            <input type="number" id="stopLossPercent" value="0.1" min="0.1" max="100" step="0.1">
+                        </div>
+                    </div>
+                    
+                    <!-- 선택된 카드 정보를 저장할 히든 필드 -->
+                    <input type="hidden" id="selectedCardId">
+                    <input type="hidden" id="selectedCardBaseId">
+                    <input type="hidden" id="selectedCardExchange">
+                    <input type="hidden" id="selectedCardCurrencyPair">
+                    <input type="hidden" id="selectedSignalThreshold" value="50">
+                    
+                    <button id="startSimulTrading" class="btn primary">자동 거래 시작</button>
+                </div>
+                
+                <div class="status-container">
+                    <div class="status-info">
+                        <div class="info-group">
+                            <div class="info-item">
+                                <span class="info-label">초기 잔액:</span>
+                                <span class="info-value" id="displayInitialBalance">1,000,000 KRW</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">현재 잔액:</span>
+                                <span class="info-value" id="displayCurrentBalance">1,000,000 KRW</span>
+                            </div>
+                        </div>
+                        <div class="info-group">
+                            <div class="info-item">
+                                <span class="info-label">총 거래 횟수:</span>
+                                <span class="info-value" id="totalTrades">0</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">수익률:</span>
+                                <span class="info-value" id="profitPercent">0.00%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <h3>거래 내역</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>시간</th>
+                                <th>상태</th>
+                                <th>매수가</th>
+                                <th>매도가</th>
+                                <th>현재가</th>
+                                <th>수량</th>
+                                <th>매수금액</th>
+                                <th>매도금액</th>
+                                <th>수익률</th>
+                                <th>현재가치</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tradingHistoryBody">
+                            <!-- 거래 내역이 여기에 동적으로 추가됩니다 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- JavaScript 파일 -->
@@ -70,6 +168,7 @@
     <script src="js/services/status.js"></script>
     <script src="js/services/websocket.js"></script>
     <script src="js/components/card.js"></script>
+    <script src="js/services/simul-trading.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html> 
