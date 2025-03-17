@@ -388,20 +388,22 @@ const CardComponent = (function() {
         const priceChange = card.querySelector('.price-change');
         if (priceChange && data.priceChangePercent !== undefined) {
             const changeValue = parseFloat(data.priceChangePercent);
-            // 값이 0이더라도 표시
-            priceChange.textContent = FormatUtils.formatPercent(changeValue);
+            // 값이 0이더라도 표시하고, 소수점 두 자리까지 표시
+            priceChange.textContent = changeValue.toFixed(2) + '%';
             priceChange.className = 'price-change ' + (changeValue > 0 ? 'positive' : changeValue < 0 ? 'negative' : 'neutral');
-            console.log(`[${cardId}] 가격 변화 업데이트: ${changeValue}%`);
+            console.log(`[${cardId}] 가격 변화 업데이트: ${changeValue.toFixed(2)}%`);
         }
 
         // 분석 결과 업데이트
         const resultValue = card.querySelector('.result-value');
         if (resultValue && data.analysisResult) {
-            resultValue.textContent = data.analysisResult;
+            // 반등 관련 결과를 매수/매도 신호로 변환
+            const displayResult = translateAnalysisResult(data.analysisResult);
+            resultValue.textContent = displayResult;
             resultValue.className = 'result-value ' + 
-                (data.analysisResult === 'BUY' || data.analysisResult === 'STRONG_BUY' ? 'positive' : 
-                 data.analysisResult === 'SELL' || data.analysisResult === 'STRONG_SELL' ? 'negative' : 'neutral');
-            console.log(`[${cardId}] 분석 결과 업데이트: ${data.analysisResult}`);
+                (displayResult === 'BUY' || displayResult === 'STRONG_BUY' ? 'positive' : 
+                 displayResult === 'SELL' || displayResult === 'STRONG_SELL' ? 'negative' : 'neutral');
+            console.log(`[${cardId}] 분석 결과 업데이트: ${data.analysisResult} -> ${displayResult}`);
         }
 
         // 매수 신호 강도 업데이트 (signal-value 요소)
@@ -431,11 +433,23 @@ const CardComponent = (function() {
         const marketCondition = card.querySelector('.market-condition');
         if (marketCondition && data.marketCondition) {
             const condition = data.marketCondition;
-            marketCondition.textContent = translateMarketCondition(condition);
-            marketCondition.className = 'market-condition ' + 
-                (condition === 'OVERBOUGHT' ? 'negative' : 
-                 condition === 'OVERSOLD' ? 'positive' : 'neutral');
-            console.log(`[${cardId}] 시장 상태 업데이트: ${condition}`);
+            const smaSignal = data.smaSignal || '';
+            
+            // 시장 상태와 SMA 신호를 함께 고려하여 표시
+            const displayCondition = getDisplayMarketCondition(condition, smaSignal);
+            marketCondition.textContent = displayCondition;
+            
+            // 클래스 설정
+            let conditionClass = 'neutral';
+            if (condition === 'OVERBOUGHT' || condition === 'STRONG_SELL' || condition === 'SELL') {
+                conditionClass = 'negative';
+            } else if (condition === 'OVERSOLD' || condition === 'STRONG_BUY' || condition === 'BUY' || 
+                      smaSignal === 'STRONG_UPTREND' || smaSignal === 'BULLISH') {
+                conditionClass = 'positive';
+            }
+            
+            marketCondition.className = 'market-condition ' + conditionClass;
+            console.log(`[${cardId}] 시장 상태 업데이트: ${condition} + ${smaSignal} -> ${displayCondition}`);
         }
 
         // 메시지 업데이트
@@ -516,8 +530,8 @@ const CardComponent = (function() {
         const volumeSignal = card.querySelector('.volume-signal');
         if (volumeSignal && data.volumeChangePercent !== undefined) {
             const volumeChange = parseFloat(data.volumeChangePercent);
-            // 값이 0이더라도 표시
-            volumeSignal.textContent = FormatUtils.formatPercent(volumeChange);
+            // 값이 0이더라도 표시하고, 소수점 두 자리까지 표시
+            volumeSignal.textContent = volumeChange.toFixed(2) + '%';
             
             let volumeClass = 'neutral';
             if (volumeChange > 20) {
@@ -527,7 +541,7 @@ const CardComponent = (function() {
             }
             
             volumeSignal.className = 'indicator-value volume-signal ' + volumeClass;
-            console.log(`[${cardId}] 거래량 변화 업데이트: ${volumeChange}%`);
+            console.log(`[${cardId}] 거래량 변화 업데이트: ${volumeChange.toFixed(2)}%`);
         }
         
         console.log(`[${cardId}] 신호 업데이트 완료`);
@@ -548,6 +562,67 @@ const CardComponent = (function() {
                 return '중립';
             default:
                 return signal;
+        }
+    }
+    
+    // 표시용 시장 상태 결정
+    function getDisplayMarketCondition(condition, smaSignal) {
+        // 기본 상태 번역
+        const baseCondition = translateMarketCondition(condition);
+        
+        // SMA 신호가 없으면 기본 상태만 반환
+        if (!smaSignal) {
+            return baseCondition;
+        }
+        
+        // 과매수/과매도 상태가 있으면 우선 표시
+        if (condition === 'OVERBOUGHT' || condition === 'OVERSOLD') {
+            // SMA 신호가 상승/하락과 일치하면 함께 표시
+            if ((condition === 'OVERBOUGHT' && (smaSignal === 'STRONG_UPTREND' || smaSignal === 'BULLISH')) ||
+                (condition === 'OVERSOLD' && (smaSignal === 'STRONG_DOWNTREND' || smaSignal === 'BEARISH'))) {
+                return baseCondition;
+            }
+            // 불일치하는 경우 과매수/과매도만 표시
+            return baseCondition;
+        }
+        
+        // 중립 상태일 때는 SMA 신호 기반으로 표시
+        if (condition === 'NEUTRAL') {
+            if (smaSignal === 'STRONG_UPTREND' || smaSignal === 'BULLISH') {
+                return '상승세';
+            } else if (smaSignal === 'STRONG_DOWNTREND' || smaSignal === 'BEARISH') {
+                return '하락세';
+            }
+        }
+        
+        // 기본적으로 시장 상태 반환
+        return baseCondition;
+    }
+    
+    // 분석 결과 번역 (반등 관련 결과를 매수/매도 신호로 변환)
+    function translateAnalysisResult(result) {
+        switch(result) {
+            case 'VERY_STRONG_REBOUND':
+            case 'STRONG_REBOUND':
+                return 'STRONG_BUY';
+            case 'POSSIBLE_REBOUND':
+            case 'WEAK_REBOUND':
+                return 'BUY';
+            case 'VERY_WEAK_REBOUND':
+                return 'NEUTRAL';
+            case 'NO_REBOUND':
+                // 추가 정보를 기반으로 결정
+                // 현재는 단순히 NEUTRAL 반환
+                return 'NEUTRAL';
+            // 기존 매수/매도 신호는 그대로 유지
+            case 'STRONG_BUY':
+            case 'BUY':
+            case 'NEUTRAL':
+            case 'SELL':
+            case 'STRONG_SELL':
+                return result;
+            default:
+                return 'NEUTRAL';
         }
     }
     

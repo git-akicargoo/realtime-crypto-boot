@@ -77,8 +77,10 @@ public class MarketAnalysisService {
 
         // SMA 계산 (동적 기간 적용)
         double smaShortDiff = calculateSMADifference(history, smaShortPeriod);
+        double smaMediumDiff = calculateSMADifference(history, smaShortPeriod * 2);
         double smaLongDiff = calculateSMADifference(history, smaLongPeriod);
         boolean smaBreakout = isSMABreakout(smaShortDiff, smaLongDiff);
+        String smaSignal = calculateSMASignal(smaShortDiff, smaMediumDiff, smaLongDiff);
 
         // CurrencyPair에서 symbol과 quoteCurrency 추출
         String currencyPairStr = latestData.getCurrencyPair().toString();
@@ -93,7 +95,7 @@ public class MarketAnalysisService {
             }
         }
 
-        return AnalysisResponse.builder()
+        AnalysisResponse response = AnalysisResponse.builder()
             .exchange(latestData.getExchange())
             .currencyPair(latestData.getCurrencyPair().toString())
             .symbol(symbol)
@@ -106,14 +108,22 @@ public class MarketAnalysisService {
             .analysisResult(determineAnalysisResult(reboundProb))
             .message(generateAnalysisMessage(priceChange, volumeChange, reboundProb))
             .sma1Difference(smaShortDiff)
+            .smaMediumDifference(smaMediumDiff)
             .sma3Difference(smaLongDiff)
             .smaBreakout(smaBreakout)
+            .smaSignal(smaSignal)
             .build();
+        
+        log.debug("Analysis response: {}", response);
+        return response;
     }
     
     private String determineAnalysisResult(double reboundProb) {
-        if (reboundProb >= 70) return "STRONG_REBOUND";
+        if (reboundProb >= 80) return "VERY_STRONG_REBOUND";
+        if (reboundProb >= 60) return "STRONG_REBOUND";
         if (reboundProb >= 40) return "POSSIBLE_REBOUND";
+        if (reboundProb >= 20) return "WEAK_REBOUND";
+        if (reboundProb >= 10) return "VERY_WEAK_REBOUND";
         return "NO_REBOUND";
     }
     
@@ -249,7 +259,9 @@ public class MarketAnalysisService {
         
         // 5. 종합 매수 신호 강도 계산
         double buySignalStrength = calculateBuySignalStrength(
-            smaResults, rsiResults, bollingerResults, volumeResults, tradingStyle);
+            smaResults, rsiResults, bollingerResults, 
+            (double) volumeResults.getOrDefault("changePercent", 0.0), 
+            (double) volumeResults.getOrDefault("priceChange", 0.0));
         
         // 6. 과매수/과매도 상태 판단
         log.info("분석에 사용되는 값들: rsiSignal={}, rsiValue={}, bollingerSignal={}, smaSignal={}", 
@@ -462,16 +474,10 @@ public class MarketAnalysisService {
     private Map<String, Object> calculateSMAIndicators(List<StandardExchangeData> history, AnalysisRequest request) {
         Map<String, Object> results = new HashMap<>();
         
-        // 충분한 데이터가 없으면 기본값 반환
-        if (history.size() < 5) {
-            log.info("SMA 계산: 제한된 데이터로 전체 평균을 계산합니다. (데이터 수: {})", history.size());
-            results.put("shortDiff", 0.0);
-            results.put("mediumDiff", 0.0);
-            results.put("longDiff", 0.0);
-            results.put("breakout", false);
-            results.put("signal", "NEUTRAL");
-            results.put("signalStrength", 50.0);
-            return results;
+        // 데이터가 최소 2개 이상 있으면 계산 시도
+        if (history.size() < 2) {
+            log.warn("SMA 계산: 최소 2개 이상의 데이터가 필요합니다. (데이터 수: {})", history.size());
+            return null;
         }
         
         try {
@@ -488,33 +494,32 @@ public class MarketAnalysisService {
             double mediumSMA = 0.0;
             double longSMA = 0.0;
             
-            // 데이터가 충분하지 않을 경우 가능한 데이터로 계산
+            // 단순 평균 계산 (데이터가 적을 경우)
+            double simpleAvg = history.stream()
+                .mapToDouble(d -> d.getPrice().doubleValue())
+                .average()
+                .orElse(currentPrice);
+            
+            // 데이터가 충분하지 않을 경우 간소화된 계산
             if (history.size() < shortPeriod) {
-                shortSMA = history.stream()
-                    .mapToDouble(d -> d.getPrice().doubleValue())
-                    .average()
-                    .orElse(currentPrice);
-                log.info("단기 SMA 계산: 제한된 데이터로 전체 평균을 계산합니다. (데이터 수: {})", history.size());
+                log.info("단기 SMA 계산: 제한된 데이터로 간소화된 계산을 수행합니다. (데이터 수: {})", history.size());
+                shortSMA = simpleAvg;
             } else {
                 shortSMA = calculateMovingAverage(history, shortPeriod);
             }
             
             if (history.size() < mediumPeriod) {
-                mediumSMA = history.stream()
-                    .mapToDouble(d -> d.getPrice().doubleValue())
-                    .average()
-                    .orElse(currentPrice);
-                log.info("중기 SMA 계산: 제한된 데이터로 전체 평균을 계산합니다. (데이터 수: {})", history.size());
+                log.info("중기 SMA 계산: 제한된 데이터로 간소화된 계산을 수행합니다. (데이터 수: {})", history.size());
+                // 중기 SMA가 없어도 단기 SMA로 계산 가능
+                mediumSMA = shortSMA;
             } else {
                 mediumSMA = calculateMovingAverage(history, mediumPeriod);
             }
             
             if (history.size() < longPeriod) {
-                longSMA = history.stream()
-                    .mapToDouble(d -> d.getPrice().doubleValue())
-                    .average()
-                    .orElse(currentPrice);
-                log.info("장기 SMA 계산: 제한된 데이터로 전체 평균을 계산합니다. (데이터 수: {})", history.size());
+                log.info("장기 SMA 계산: 제한된 데이터로 간소화된 계산을 수행합니다. (데이터 수: {})", history.size());
+                // 장기 SMA가 없어도 중기 SMA로 계산 가능
+                longSMA = mediumSMA;
             } else {
                 longSMA = calculateMovingAverage(history, longPeriod);
             }
@@ -576,12 +581,7 @@ public class MarketAnalysisService {
                 
         } catch (Exception e) {
             log.error("SMA 계산 중 오류 발생: {}", e.getMessage(), e);
-            results.put("shortDiff", 0.0);
-            results.put("mediumDiff", 0.0);
-            results.put("longDiff", 0.0);
-            results.put("breakout", false);
-            results.put("signal", "NEUTRAL");
-            results.put("signalStrength", 50.0);
+            return null;
         }
         
         return results;
@@ -595,13 +595,10 @@ public class MarketAnalysisService {
         int overbought = request.getRsiOverbought();
         int oversold = request.getRsiOversold();
         
-        // 충분한 데이터가 없으면 기본값 반환
-        if (history.size() < period + 1) {
-            log.info("RSI 계산: 제한된 데이터로 계산합니다. (데이터 수: {})", history.size());
-            results.put("value", 50.0);
-            results.put("signal", "NEUTRAL");
-            results.put("signalStrength", 50.0);
-            return results;
+        // 데이터가 최소 2개 이상 있으면 계산 시도
+        if (history.size() < 2) {
+            log.warn("RSI 계산: 최소 2개 이상의 데이터가 필요합니다. (현재: {})", history.size());
+            return null;
         }
         
         try {
@@ -610,8 +607,15 @@ public class MarketAnalysisService {
                                        .map(data -> data.getPrice().doubleValue())
                                        .collect(Collectors.toList());
             
-            // RSI 계산
-            double rsi = calculateRSI(prices, period);
+            // 간소화된 RSI 계산 (데이터가 적을 경우)
+            double rsi;
+            if (history.size() < period + 1) {
+                log.info("RSI 계산: 제한된 데이터로 간소화된 계산을 수행합니다. (데이터 수: {})", history.size());
+                rsi = calculateSimplifiedRSI(prices);
+            } else {
+                // 충분한 데이터가 있으면 정상 RSI 계산
+                rsi = calculateRSI(prices, period);
+            }
             
             // RSI 신호 결정
             String signal;
@@ -651,12 +655,39 @@ public class MarketAnalysisService {
             
         } catch (Exception e) {
             log.error("RSI 계산 중 오류 발생: {}", e.getMessage(), e);
-            results.put("value", 50.0);
-            results.put("signal", "NEUTRAL");
-            results.put("signalStrength", 50.0);
+            return null;
         }
         
         return results;
+    }
+    
+    // 간소화된 RSI 계산 (데이터가 적을 경우)
+    private double calculateSimplifiedRSI(List<Double> prices) {
+        if (prices.size() < 2) return 50.0;
+        
+        // 가격 변화 계산
+        double totalGain = 0;
+        double totalLoss = 0;
+        int count = 0;
+        
+        for (int i = 1; i < prices.size(); i++) {
+            double change = prices.get(i) - prices.get(i - 1);
+            if (change > 0) {
+                totalGain += change;
+            } else {
+                totalLoss += Math.abs(change);
+            }
+            count++;
+        }
+        
+        // 평균 이득/손실 계산
+        double avgGain = totalGain / count;
+        double avgLoss = totalLoss / count;
+        
+        // RSI 계산
+        if (avgLoss == 0) return 100.0;
+        double rs = avgGain / avgLoss;
+        return 100.0 - (100.0 / (1.0 + rs));
     }
     
     // RSI 계산 메서드
@@ -703,57 +734,67 @@ public class MarketAnalysisService {
         return 100.0 - (100.0 / (1.0 + rs));
     }
     
-    // 볼린저 밴드 계산 메서드 추가
+    // 볼린저 밴드 계산 메서드 수정 - 최소 데이터로도 작동하도록
     private Map<String, Object> calculateBollingerBands(List<StandardExchangeData> history, AnalysisRequest request) {
         Map<String, Object> results = new HashMap<>();
         
         int period = request.getBollingerPeriod();
         double deviation = request.getBollingerDeviation();
         
-        // 충분한 데이터가 없으면 기본값 반환
-        if (history.size() < period) {
-            log.info("볼린저 밴드 계산: 제한된 데이터로 계산합니다. (데이터 수: {})", history.size());
-            double currentPrice = history.get(history.size() - 1).getPrice().doubleValue();
-            results.put("upper", currentPrice * 1.05);
-            results.put("middle", currentPrice);
-            results.put("lower", currentPrice * 0.95);
-            results.put("width", 10.0);
-            results.put("signal", "INSIDE");
-            results.put("signalStrength", 50.0);
-            return results;
+        // 데이터가 최소 2개 이상 있으면 계산 시도
+        if (history.size() < 2) {
+            log.warn("볼린저 밴드 계산: 최소 2개 이상의 데이터가 필요합니다. (현재: {})", history.size());
+            return null;
         }
         
         try {
             // 현재 가격
             double currentPrice = history.get(history.size() - 1).getPrice().doubleValue();
             
-            // 중간 밴드 (SMA)
-            double middleBand = 0.0;
-            if (period * 60 > history.size()) {
-                // 데이터가 충분하지 않으면 전체 데이터로 계산
-                middleBand = history.stream()
-                    .mapToDouble(d -> d.getPrice().doubleValue())
-                    .average()
-                    .orElse(currentPrice);
-                log.info("볼린저 밴드 SMA 계산: 제한된 데이터로 계산합니다. (데이터 수: {})", history.size());
+            // 간소화된 볼린저 밴드 계산 (데이터가 적을 경우)
+            double middleBand, upperBand, lowerBand, bandWidth;
+            
+            if (history.size() < period) {
+                log.info("볼린저 밴드 계산: 제한된 데이터로 간소화된 계산을 수행합니다. (데이터 수: {})", history.size());
+                
+                // 단순 이동평균 계산
+                double sum = 0;
+                for (StandardExchangeData data : history) {
+                    sum += data.getPrice().doubleValue();
+                }
+                middleBand = sum / history.size();
+                
+                // 단순 표준편차 계산
+                double sumSquaredDiff = 0;
+                for (StandardExchangeData data : history) {
+                    double diff = data.getPrice().doubleValue() - middleBand;
+                    sumSquaredDiff += diff * diff;
+                }
+                double stdDev = Math.sqrt(sumSquaredDiff / history.size());
+                
+                // 밴드 계산
+                upperBand = middleBand + (stdDev * deviation);
+                lowerBand = middleBand - (stdDev * deviation);
+                bandWidth = ((upperBand - lowerBand) / middleBand) * 100;
             } else {
+                // 충분한 데이터가 있으면 정상 볼린저 밴드 계산
                 middleBand = calculateMovingAverage(history, period * 60);
+                
+                // 표준 편차 계산
+                double sum = 0;
+                for (int i = Math.max(0, history.size() - period); i < history.size(); i++) {
+                    double price = history.get(i).getPrice().doubleValue();
+                    sum += Math.pow(price - middleBand, 2);
+                }
+                double stdDev = Math.sqrt(sum / Math.min(period, history.size()));
+                
+                // 상단 및 하단 밴드
+                upperBand = middleBand + (stdDev * deviation);
+                lowerBand = middleBand - (stdDev * deviation);
+                
+                // 밴드 폭 (변동성 지표)
+                bandWidth = ((upperBand - lowerBand) / middleBand) * 100;
             }
-            
-            // 표준 편차 계산
-            double sum = 0;
-            for (int i = Math.max(0, history.size() - period); i < history.size(); i++) {
-                double price = history.get(i).getPrice().doubleValue();
-                sum += Math.pow(price - middleBand, 2);
-            }
-            double stdDev = Math.sqrt(sum / Math.min(period, history.size()));
-            
-            // 상단 및 하단 밴드
-            double upperBand = middleBand + (stdDev * deviation);
-            double lowerBand = middleBand - (stdDev * deviation);
-            
-            // 밴드 폭 (변동성 지표)
-            double bandWidth = ((upperBand - lowerBand) / middleBand) * 100;
             
             // 볼린저 밴드 신호 결정
             String signal;
@@ -803,13 +844,7 @@ public class MarketAnalysisService {
                 
         } catch (Exception e) {
             log.error("볼린저 밴드 계산 중 오류 발생: {}", e.getMessage(), e);
-            double currentPrice = history.get(history.size() - 1).getPrice().doubleValue();
-            results.put("upper", currentPrice * 1.05);
-            results.put("middle", currentPrice);
-            results.put("lower", currentPrice * 0.95);
-            results.put("width", 10.0);
-            results.put("signal", "INSIDE");
-            results.put("signalStrength", 50.0);
+            return null;
         }
         
         return results;
@@ -870,54 +905,54 @@ public class MarketAnalysisService {
         return results;
     }
     
-    // 새로운 메서드: 종합 매수 신호 강도 계산
+    // 매수 신호 강도 계산 (새로운 버전)
     private double calculateBuySignalStrength(
             Map<String, Object> smaResults, 
             Map<String, Object> rsiResults, 
-            Map<String, Object> bollingerResults, 
-            Map<String, Object> volumeResults, 
-            String tradingStyle) {
+            Map<String, Object> bbResults,
+            double priceChange,
+            double volumeChange) {
         
-        try {
-            // tradingStyle이 null인 경우 기본값 설정
-            if (tradingStyle == null) {
-                tradingStyle = "DAY_TRADING";
-                log.warn("tradingStyle이 null입니다. 기본값 'DAY_TRADING'으로 설정합니다.");
-            }
-            
-            // 트레이딩 스타일에 따른 가중치 가져오기
-            Map<String, Double> weights = tradingStyleConfig.getWeightsForStyle(tradingStyle);
-            
-            // 각 지표별 신호 강도 가져오기
-            double smaSignalStrength = (double) smaResults.getOrDefault("signalStrength", 50.0);
-            double rsiSignalStrength = (double) rsiResults.getOrDefault("signalStrength", 50.0);
-            double bollingerSignalStrength = (double) bollingerResults.getOrDefault("signalStrength", 50.0);
-            double volumeSignalStrength = (double) volumeResults.getOrDefault("signalStrength", 50.0);
-            
-            // 가중 평균 계산
-            double totalWeight = weights.values().stream().mapToDouble(Double::doubleValue).sum();
-            if (totalWeight == 0) {
-                totalWeight = 4.0; // 기본 가중치 합계
-                log.warn("가중치 합계가 0입니다. 기본값 4.0으로 설정합니다.");
-            }
-            
-            double weightedSum = 
-                (smaSignalStrength * weights.getOrDefault("sma", 1.0)) +
-                (rsiSignalStrength * weights.getOrDefault("rsi", 1.0)) +
-                (bollingerSignalStrength * weights.getOrDefault("bollinger", 1.0)) +
-                (volumeSignalStrength * weights.getOrDefault("volume", 1.0));
-            
-            double result = weightedSum / totalWeight;
-            
-            log.debug("매수 신호 강도 계산 결과: {}, sma={}, rsi={}, bollinger={}, volume={}, tradingStyle={}",
-                result, smaSignalStrength, rsiSignalStrength, bollingerSignalStrength, volumeSignalStrength, tradingStyle);
-                
-            return result;
-            
-        } catch (Exception e) {
-            log.error("매수 신호 강도 계산 중 오류 발생: {}", e.getMessage(), e);
-            return 50.0; // 오류 발생 시 중립값 반환
+        // 모든 지표가 null이면 계산 불가
+        if (smaResults == null && rsiResults == null && bbResults == null) {
+            return 0.0;
         }
+        
+        double smaSignalStrength = 0.0;
+        double rsiSignalStrength = 0.0;
+        double bbSignalStrength = 0.0;
+        
+        // SMA 신호 강도
+        if (smaResults != null && smaResults.containsKey("signalStrength")) {
+            smaSignalStrength = (Double) smaResults.get("signalStrength");
+        }
+        
+        // RSI 신호 강도
+        if (rsiResults != null && rsiResults.containsKey("signalStrength")) {
+            rsiSignalStrength = (Double) rsiResults.get("signalStrength");
+        }
+        
+        // 볼린저 밴드 신호 강도
+        if (bbResults != null && bbResults.containsKey("signalStrength")) {
+            bbSignalStrength = (Double) bbResults.get("signalStrength");
+        }
+        
+        // 가중치 적용 (SMA: 40%, RSI: 30%, BB: 30%)
+        double weightedStrength = (smaSignalStrength * 0.4) + 
+                                 (rsiSignalStrength * 0.3) + 
+                                 (bbSignalStrength * 0.3);
+        
+        // 가격 및 거래량 변화에 따른 보정
+        if (priceChange < -5 && volumeChange > 50) {
+            // 급격한 가격 하락과 거래량 증가는 반등 가능성 증가
+            weightedStrength += 10;
+        } else if (priceChange > 5 && volumeChange > 50) {
+            // 급격한 가격 상승과 거래량 증가는 추세 지속 가능성 증가
+            weightedStrength += 5;
+        }
+        
+        // 최종 신호 강도 (0-100% 범위 내로 조정)
+        return Math.max(0, Math.min(100, weightedStrength));
     }
     
     // 새로운 메서드: 과매수/과매도 상태 판단
@@ -1012,5 +1047,273 @@ public class MarketAnalysisService {
         request.setSmaLongPeriod(smaLongPeriod);
         
         return startRealtimeAnalysis(request);
+    }
+
+    // 새로운 메서드 추가: SMA 신호 계산
+    private String calculateSMASignal(double smaShortDiff, double smaMediumDiff, double smaLongDiff) {
+        if (smaShortDiff > 0 && smaMediumDiff > 0 && smaLongDiff > 0) {
+            return "STRONG_UPTREND"; // 강한 상승 추세
+        } else if (smaShortDiff > 0 && smaShortDiff > smaMediumDiff) {
+            return "BUY"; // 상승 추세
+        } else if (smaShortDiff < 0 && smaMediumDiff < 0 && smaLongDiff < 0) {
+            return "STRONG_DOWNTREND"; // 강한 하락 추세
+        } else if (smaShortDiff < 0 && smaShortDiff < smaMediumDiff) {
+            return "SELL"; // 하락 추세
+        } else if (smaShortDiff > 0 && smaMediumDiff < 0) {
+            return "BULLISH"; // 단기 상승 (매수 신호)
+        } else if (smaShortDiff < 0 && smaMediumDiff > 0) {
+            return "BEARISH"; // 단기 하락 (매도 신호)
+        } else {
+            return "NEUTRAL"; // 중립
+        }
+    }
+
+    // 새로운 메서드: 반등 분석 (AnalysisRequest 사용)
+    public Map<String, Object> analyzeRebound(StandardExchangeData currentData, 
+                                            List<StandardExchangeData> history,
+                                            AnalysisRequest request) {
+        log.info("Analyzing rebound for {} - {}", currentData.getExchange(), currentData.getCurrencyPair());
+        
+        if (history.isEmpty()) {
+            log.warn("No historical data available for analysis");
+            return null;
+        }
+        
+        Map<String, Object> results = new HashMap<>();
+        
+        try {
+            // 가격 변화율 계산
+            double priceChange = calculatePriceChange(currentData, history);
+            log.debug("Calculated price change: {}%", priceChange);
+            
+            // 거래량 변화율 계산
+            double volumeChange = calculateVolumeChange(currentData, history);
+            log.debug("Calculated volume change: {}%", volumeChange);
+            
+            // 반등 확률 계산
+            double reboundProb = calculateReboundProbability(priceChange, volumeChange);
+            log.debug("Calculated rebound probability: {}%", reboundProb);
+            
+            // 기본 결과 저장
+            String reboundResult = determineAnalysisResult(reboundProb);
+            results.put("reboundResult", reboundResult); // 반등 결과 저장
+            results.put("probability", reboundProb);
+            
+            // SMA 계산 - 항상 값을 반환하도록 함
+            Map<String, Object> smaResults = calculateSMAIndicators(history, request);
+            if (smaResults != null) {
+                results.put("smaShortDifference", smaResults.get("shortDiff"));
+                results.put("smaMediumDifference", smaResults.get("mediumDiff"));
+                results.put("smaLongDifference", smaResults.get("longDiff"));
+                results.put("smaBreakout", smaResults.get("breakout"));
+                results.put("smaSignal", smaResults.get("signal"));
+            } else if (history.size() >= 2) {
+                // 최소 데이터로 SMA 계산
+                double currentPrice = currentData.getPrice().doubleValue();
+                double prevPrice = history.get(history.size() - 1).getPrice().doubleValue();
+                double diff = ((currentPrice - prevPrice) / prevPrice) * 100;
+                
+                results.put("smaShortDifference", diff);
+                results.put("smaMediumDifference", diff);
+                results.put("smaLongDifference", diff);
+                results.put("smaBreakout", diff > 0);
+                results.put("smaSignal", diff > 0 ? "BULLISH" : "BEARISH");
+            }
+            
+            // RSI 계산 - 항상 값을 반환하도록 함
+            Map<String, Object> rsiResults = calculateRSIIndicators(history, request);
+            if (rsiResults != null) {
+                results.put("rsiValue", rsiResults.get("value"));
+                results.put("rsiSignal", rsiResults.get("signal"));
+            } else if (history.size() >= 2) {
+                // 최소 데이터로 RSI 계산
+                double currentPrice = currentData.getPrice().doubleValue();
+                double prevPrice = history.get(history.size() - 1).getPrice().doubleValue();
+                double change = currentPrice - prevPrice;
+                
+                // 간단한 RSI 계산 (2개 데이터 기준)
+                double rsiValue;
+                if (change > 0) {
+                    rsiValue = 70.0; // 상승 시 과매수 쪽으로
+                } else if (change < 0) {
+                    rsiValue = 30.0; // 하락 시 과매도 쪽으로
+                } else {
+                    rsiValue = 50.0; // 변화 없음
+                }
+                
+                String rsiSignal;
+                if (rsiValue >= 70) {
+                    rsiSignal = "OVERBOUGHT";
+                } else if (rsiValue <= 30) {
+                    rsiSignal = "OVERSOLD";
+                } else {
+                    rsiSignal = "NEUTRAL";
+                }
+                
+                results.put("rsiValue", rsiValue);
+                results.put("rsiSignal", rsiSignal);
+            }
+            
+            // 볼린저 밴드 계산 - 항상 값을 반환하도록 함
+            Map<String, Object> bbResults = calculateBollingerBands(history, request);
+            if (bbResults != null) {
+                results.put("bollingerUpper", bbResults.get("upper"));
+                results.put("bollingerMiddle", bbResults.get("middle"));
+                results.put("bollingerLower", bbResults.get("lower"));
+                results.put("bollingerWidth", bbResults.get("width"));
+                results.put("bollingerSignal", bbResults.get("signal"));
+            } else if (history.size() >= 2) {
+                // 최소 데이터로 볼린저 밴드 계산
+                double currentPrice = currentData.getPrice().doubleValue();
+                double prevPrice = history.get(history.size() - 1).getPrice().doubleValue();
+                double avgPrice = (currentPrice + prevPrice) / 2;
+                double diff = Math.abs(currentPrice - prevPrice);
+                
+                // 간단한 볼린저 밴드 계산 (2개 데이터 기준)
+                double middle = avgPrice;
+                double upper = middle + (diff * 2);
+                double lower = middle - (diff * 2);
+                double width = ((upper - lower) / middle) * 100;
+                
+                String signal;
+                if (currentPrice >= upper) {
+                    signal = "UPPER_TOUCH";
+                } else if (currentPrice <= lower) {
+                    signal = "LOWER_TOUCH";
+                } else if (currentPrice > middle) {
+                    signal = "UPPER_HALF";
+                } else if (currentPrice < middle) {
+                    signal = "LOWER_HALF";
+                } else {
+                    signal = "MIDDLE_CROSS";
+                }
+                
+                results.put("bollingerUpper", upper);
+                results.put("bollingerMiddle", middle);
+                results.put("bollingerLower", lower);
+                results.put("bollingerWidth", width);
+                results.put("bollingerSignal", signal);
+            }
+            
+            // 매수 신호 강도 계산
+            double buySignalStrength;
+            if (smaResults != null && rsiResults != null && bbResults != null) {
+                buySignalStrength = calculateBuySignalStrength(
+                    smaResults, rsiResults, bbResults, priceChange, volumeChange);
+            } else {
+                // 간단한 매수 신호 강도 계산 (기본 지표가 없을 때)
+                if (priceChange > 0 && volumeChange > 0) {
+                    buySignalStrength = 70.0; // 가격과 거래량 모두 증가 시 강한 매수 신호
+                } else if (priceChange > 0) {
+                    buySignalStrength = 60.0; // 가격만 증가 시 중간 매수 신호
+                } else if (priceChange < 0 && volumeChange > 50) {
+                    buySignalStrength = 55.0; // 가격 하락, 거래량 급증 시 약한 매수 신호 (반등 가능성)
+                } else if (priceChange < 0) {
+                    buySignalStrength = 30.0; // 가격 하락 시 매도 신호
+                } else {
+                    buySignalStrength = 50.0; // 중립
+                }
+            }
+            results.put("buySignalStrength", buySignalStrength);
+            
+            // 시장 상태 분석
+            Map<String, Object> marketCondition;
+            if (smaResults != null && rsiResults != null && bbResults != null) {
+                marketCondition = analyzeMarketCondition(
+                    smaResults, rsiResults, bbResults, priceChange, volumeChange);
+            } else {
+                // 간단한 시장 상태 분석 (기본 지표가 없을 때)
+                marketCondition = new HashMap<>();
+                if (priceChange > 3) {
+                    marketCondition.put("condition", "OVERBOUGHT");
+                    marketCondition.put("strength", 70.0);
+                } else if (priceChange < -3) {
+                    marketCondition.put("condition", "OVERSOLD");
+                    marketCondition.put("strength", 70.0);
+                } else {
+                    marketCondition.put("condition", "NEUTRAL");
+                    marketCondition.put("strength", 50.0);
+                }
+            }
+            
+            if (marketCondition != null) {
+                results.put("marketCondition", marketCondition.get("condition"));
+                results.put("marketConditionStrength", marketCondition.get("strength"));
+            }
+            
+            // 매수/매도 신호로 변환된 분석 결과 설정
+            String tradingSignal = determineTradingSignal(buySignalStrength);
+            results.put("result", tradingSignal);
+            
+            return results;
+        } catch (Exception e) {
+            log.error("Error in rebound analysis: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+    
+    // 시장 상태 분석
+    private Map<String, Object> analyzeMarketCondition(
+            Map<String, Object> smaResults, 
+            Map<String, Object> rsiResults, 
+            Map<String, Object> bbResults,
+            double priceChange,
+            double volumeChange) {
+        
+        // 모든 지표가 null이면 계산 불가
+        if (smaResults == null && rsiResults == null && bbResults == null) {
+            return null;
+        }
+        
+        Map<String, Object> result = new HashMap<>();
+        String condition = "NEUTRAL";
+        double strength = 50.0;
+        
+        // RSI 기반 과매수/과매도 상태 확인
+        if (rsiResults != null && rsiResults.containsKey("signal")) {
+            String rsiSignal = (String) rsiResults.get("signal");
+            if ("OVERBOUGHT".equals(rsiSignal)) {
+                condition = "OVERBOUGHT";
+                strength = 80.0;
+            } else if ("OVERSOLD".equals(rsiSignal)) {
+                condition = "OVERSOLD";
+                strength = 20.0;
+            }
+        }
+        
+        // SMA 기반 추세 확인
+        if (smaResults != null && smaResults.containsKey("signal")) {
+            String smaSignal = (String) smaResults.get("signal");
+            if ("STRONG_UPTREND".equals(smaSignal)) {
+                if (!"OVERBOUGHT".equals(condition)) {
+                    condition = "BULLISH";
+                    strength = 70.0;
+                }
+            } else if ("STRONG_DOWNTREND".equals(smaSignal)) {
+                if (!"OVERSOLD".equals(condition)) {
+                    condition = "BEARISH";
+                    strength = 30.0;
+                }
+            }
+        }
+        
+        // 볼린저 밴드 기반 변동성 확인
+        if (bbResults != null && bbResults.containsKey("width")) {
+            double bbWidth = (Double) bbResults.get("width");
+            if (bbWidth > 5.0) {
+                // 높은 변동성
+                result.put("volatility", "HIGH");
+            } else if (bbWidth < 2.0) {
+                // 낮은 변동성
+                result.put("volatility", "LOW");
+            } else {
+                // 보통 변동성
+                result.put("volatility", "MEDIUM");
+            }
+        }
+        
+        result.put("condition", condition);
+        result.put("strength", strength);
+        return result;
     }
 }

@@ -104,6 +104,13 @@ logging:
     # JPA SQL 로깅 추가
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    # 디버깅을 위한 로깅 레벨 추가
+    com.example.boot.exchange.layer5_price_cache.redis: INFO
+    com.example.boot.exchange.layer5_price_cache.redis.service.RedisCacheService: WARN
+    com.example.boot.exchange.layer6_analysis: DEBUG
+    com.example.boot.web.websocket: DEBUG
+    org.springframework.messaging: INFO
+    org.springframework.web.socket: INFO
 
 # CORS 설정
 cors:

@@ -3,15 +3,15 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   server: {
     proxy: {
-      '/config': {
+      '/api/v1/config': {
         target: 'http://localhost:8080',
         changeOrigin: true
       },
-      '/api': {
+      '/api/v1': {
         target: 'http://localhost:8080',
         changeOrigin: true
       },
-      '/ws/analysis': {
+      '/ws/stomp/analysis': {
         target: 'ws://localhost:8080',
         ws: true
       },
