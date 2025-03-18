@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Client } from '@stomp/stompjs';
 
 interface ExchangeConfig {
     exchanges: string[];
@@ -26,7 +27,7 @@ const Analysis: React.FC = () => {
         smaLongPeriod: 3
     });
     const [analysisResults, setAnalysisResults] = useState<any[]>([]);
-    const socketRef = useRef<WebSocket | null>(null);
+    const stompClientRef = useRef<Client | null>(null);
 
     // 거래소 설정 로드
     useEffect(() => {
@@ -45,35 +46,55 @@ const Analysis: React.FC = () => {
         }
     }, [selectedExchange, exchangeConfig]);
 
-    // 웹소켓 연결
+    // STOMP 클라이언트 연결
     useEffect(() => {
-        const socket = new WebSocket('ws://localhost:8080/ws/analysis');
-        
-        socket.onopen = () => {
-            console.log('WebSocket connected');
+        const stompClient = new Client({
+            brokerURL: 'ws://localhost:8080/ws/stomp/analysis',
+            debug: function (str) {
+                console.log('STOMP: ' + str);
+            },
+            reconnectDelay: 5000,
+            heartbeatIncoming: 4000,
+            heartbeatOutgoing: 4000
+        });
+
+        stompClient.onConnect = () => {
+            console.log('STOMP Connected');
+            
+            // 분석 결과 구독
+            stompClient.subscribe('/topic/analysis', message => {
+                try {
+                    const data = JSON.parse(message.body);
+                    setAnalysisResults(prev => [...prev, data]);
+                } catch (e) {
+                    console.error('Failed to parse STOMP message:', e);
+                }
+            });
+            
+            // 에러 메시지 구독
+            stompClient.subscribe('/topic/analysis.error', message => {
+                console.error('Analysis error:', message.body);
+                alert('Analysis error: ' + message.body);
+            });
+            
+            // 분석 중지 메시지 구독
+            stompClient.subscribe('/topic/analysis.stop', message => {
+                console.log('Analysis stopped:', message.body);
+            });
         };
         
-        socket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                setAnalysisResults(prev => [...prev, data]);
-            } catch (e) {
-                console.error('Failed to parse WebSocket message:', e);
-            }
+        stompClient.onStompError = (frame) => {
+            console.error('STOMP error:', frame.headers['message']);
+            console.error('Additional details:', frame.body);
         };
         
-        socket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-        
-        socket.onclose = () => {
-            console.log('WebSocket disconnected');
-        };
-        
-        socketRef.current = socket;
+        stompClient.activate();
+        stompClientRef.current = stompClient;
         
         return () => {
-            socket.close();
+            if (stompClient.connected) {
+                stompClient.deactivate();
+            }
         };
     }, []);
 
@@ -92,16 +113,42 @@ const Analysis: React.FC = () => {
         }
         
         const request = {
+            action: 'startAnalysis',
             exchange: selectedExchange,
             currencyPair: selectedPair,
             ...analysisParams
         };
         
-        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        if (stompClientRef.current && stompClientRef.current.connected) {
             console.log('Sending analysis request:', request);
-            socketRef.current.send(JSON.stringify(request));
+            stompClientRef.current.publish({
+                destination: '/app/analysis.start',
+                body: JSON.stringify(request)
+            });
         } else {
-            console.error('WebSocket not connected');
+            console.error('STOMP not connected');
+        }
+    };
+    
+    const stopAnalysis = () => {
+        if (!selectedExchange || !selectedPair) {
+            return;
+        }
+        
+        const request = {
+            action: 'stopAnalysis',
+            exchange: selectedExchange,
+            currencyPair: selectedPair
+        };
+        
+        if (stompClientRef.current && stompClientRef.current.connected) {
+            console.log('Sending stop request:', request);
+            stompClientRef.current.publish({
+                destination: '/app/analysis.stop',
+                body: JSON.stringify(request)
+            });
+        } else {
+            console.error('STOMP not connected');
         }
     };
 
@@ -180,6 +227,7 @@ const Analysis: React.FC = () => {
                 </div>
                 
                 <button onClick={startAnalysis}>Start Analysis</button>
+                <button onClick={stopAnalysis} style={{ marginLeft: '10px' }}>Stop Analysis</button>
             </div>
             
             <div className="analysis-results">

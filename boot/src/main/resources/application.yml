@@ -60,6 +60,7 @@ exchange:
     supported-symbols:
       - BTC
       - ETH
+      - TRUMP
       - XRP
       - DOGE
       - USDT
