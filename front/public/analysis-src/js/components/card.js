@@ -202,6 +202,7 @@ const CardComponent = (function() {
     function stopAnalysis(card) {
         console.log('분석 중지');
         
+        const cardId = card.id;
         const exchange = card.getAttribute('data-exchange');
         const currencyPair = card.getAttribute('data-currency-pair');
         
@@ -215,15 +216,14 @@ const CardComponent = (function() {
             loadingIndicator.style.display = 'none';
         }
         
-        // 웹소켓 연결 중지
-        const request = {
-            action: 'stopAnalysis',
-            exchange: exchange,
-            currencyPair: currencyPair
-        };
-        
-        console.log('웹소켓 요청 전송:', request);
-        window.WebSocketService.send(request);
+        // 중지 요청 전송 - cardId와 함께 exchange, currencyPair도 전달
+        console.log('중지 요청 전송 - ID:', cardId, 'Exchange:', exchange, 'Pair:', currencyPair);
+        if (window.WebSocketService) {
+            // 전체 정보를 전달하여 정확히 찾을 수 있도록 함
+            window.WebSocketService.stopAnalysis(exchange, currencyPair, null, null, card);
+        } else {
+            console.error('WebSocketService를 찾을 수 없습니다.');
+        }
     }
     
     // 분석 재시도 함수
@@ -244,18 +244,18 @@ const CardComponent = (function() {
     function deleteCard(card) {
         console.log('카드 삭제');
         
+        const cardId = card.id;
         const exchange = card.getAttribute('data-exchange');
         const currencyPair = card.getAttribute('data-currency-pair');
         
-        // 웹소켓 연결 중지
-        const request = {
-            action: 'stopAnalysis',
-            exchange: exchange,
-            currencyPair: currencyPair
-        };
-        
-        console.log('웹소켓 요청 전송:', request);
-        window.WebSocketService.send(request);
+        // 먼저 분석 중지
+        console.log('삭제 전 분석 중지 요청 전송 - ID:', cardId, 'Exchange:', exchange, 'Pair:', currencyPair);
+        if (window.WebSocketService) {
+            // 전체 정보를 전달하여 정확히 찾을 수 있도록 함
+            window.WebSocketService.stopAnalysis(exchange, currencyPair, null, null, card);
+        } else {
+            console.error('WebSocketService를 찾을 수 없습니다.');
+        }
         
         // 카드 제거
         card.remove();
