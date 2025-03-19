@@ -83,8 +83,13 @@ public class AnalysisStompController {
                             log.debug("Analysis response JSON: {}", jsonResponse);
                         }
                         
+                        // 카드 ID별로 별도 토픽으로 메시지 전송
+                        String cardSpecificTopic = "/topic/analysis." + cardId;
+                        messagingTemplate.convertAndSend(cardSpecificTopic, response);
+                        log.debug("Analysis response sent to {}", cardSpecificTopic);
+                        
+                        // 하위 호환성을 위해 공통 토픽에도 함께 전송
                         messagingTemplate.convertAndSend("/topic/analysis", response);
-                        log.debug("Analysis response sent to /topic/analysis");
                     } catch (Exception e) {
                         log.error("Error processing response: {}", e.getMessage(), e);
                     }
@@ -109,7 +114,7 @@ public class AnalysisStompController {
                 }
             );
         
-        // 테스트 메시지 전송
+        // 테스트 메시지 전송 - 카드 ID별 토픽으로 전송
         AnalysisResponse testResponse = AnalysisResponse.builder()
             .exchange(request.getExchange())
             .currencyPair(request.getCurrencyPair())
@@ -117,7 +122,11 @@ public class AnalysisStompController {
             .message("테스트 메시지 - 분석 시작됨")
             .build();
         
-        log.debug("Sending test message to /topic/analysis");
+        String cardSpecificTopic = "/topic/analysis." + cardId;
+        log.debug("Sending test message to {}", cardSpecificTopic);
+        messagingTemplate.convertAndSend(cardSpecificTopic, testResponse);
+        
+        // 하위 호환성을 위해 공통 토픽에도 함께 전송
         messagingTemplate.convertAndSend("/topic/analysis", testResponse);
     }
 
@@ -132,10 +141,17 @@ public class AnalysisStompController {
         // 분석 중지 및 등록 해제
         analysisManager.unregisterAnalysis(cardId);
         
-        // 중지 메시지 전송
-        messagingTemplate.convertAndSend("/topic/analysis.stop", 
-            Map.of("cardId", cardId, "message", 
-                String.format("Analysis stopped for %s-%s", request.getExchange(), request.getCurrencyPair())));
+        // 중지 메시지 전송 - 카드 ID별 토픽으로 전송
+        Map<String, String> stopMessage = Map.of(
+            "cardId", cardId, 
+            "message", String.format("Analysis stopped for %s-%s", request.getExchange(), request.getCurrencyPair())
+        );
+        
+        String cardSpecificTopic = "/topic/analysis.stop." + cardId;
+        messagingTemplate.convertAndSend(cardSpecificTopic, stopMessage);
+        
+        // 하위 호환성을 위해 공통 토픽에도 함께 전송
+        messagingTemplate.convertAndSend("/topic/analysis.stop", stopMessage);
     }
     
     /**
