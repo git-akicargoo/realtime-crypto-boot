@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Service;
@@ -132,7 +133,19 @@ public class CryptoAnalysisService {
                         return response;
                     });
                 })
-                .doOnError(e -> log.error("Error during analysis: {}", e.getMessage(), e))
+                .doOnCancel(() -> {
+                    log.info("Analysis stream cancelled for {}-{}", request.getExchange(), request.getCurrencyPair());
+                })
+                .onErrorResume(CancellationException.class, ex -> {
+                    log.info("Analysis stream cancelled due to disconnection for {}-{}", 
+                            request.getExchange(), request.getCurrencyPair());
+                    return Mono.empty();
+                })
+                .doOnError(e -> {
+                    if (!(e instanceof CancellationException)) {
+                        log.error("Error during analysis: {}", e.getMessage(), e);
+                    }
+                })
                 .doOnComplete(() -> log.info("Analysis complete for {}-{}", request.getExchange(), request.getCurrencyPair()))
         );
         

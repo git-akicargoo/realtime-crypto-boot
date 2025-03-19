@@ -2,6 +2,7 @@ package com.example.boot.web.websocket.controller;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
 
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -89,9 +90,13 @@ public class AnalysisStompController {
                     }
                 },
                 error -> {
-                    log.error("Error in analysis stream: {}", error.getMessage(), error);
-                    messagingTemplate.convertAndSend("/topic/analysis.error", 
-                            Map.of("cardId", cardId, "error", error.getMessage()));
+                    if (error instanceof CancellationException) {
+                        log.info("Analysis cancelled due to disconnection for cardId: {}", cardId);
+                    } else {
+                        log.error("Error in analysis stream: {}", error.getMessage(), error);
+                        messagingTemplate.convertAndSend("/topic/analysis.error", 
+                                Map.of("cardId", cardId, "error", error.getMessage()));
+                    }
                     
                     // 에러 발생 시 분석 요청 제거
                     analysisManager.unregisterAnalysis(cardId);
