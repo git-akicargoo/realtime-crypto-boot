@@ -7,7 +7,7 @@ import org.springframework.stereotype.Controller;
 
 import com.example.boot.exchange.layer6_analysis.dto.AnalysisRequest;
 import com.example.boot.exchange.layer6_analysis.dto.AnalysisResponse;
-import com.example.boot.exchange.layer6_analysis.service.RealTimeAnalysisService;
+import com.example.boot.exchange.layer6_analysis.service.CryptoAnalysisService;
 import com.example.boot.web.controller.InfrastructureStatusController;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -19,7 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AnalysisStompController {
     
-    private final RealTimeAnalysisService analysisService;
+    private final CryptoAnalysisService analysisService;
     private final InfrastructureStatusController infraStatus;
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
