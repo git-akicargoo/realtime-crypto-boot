@@ -202,9 +202,14 @@ const CardComponent = (function() {
     function stopAnalysis(card) {
         console.log('분석 중지');
         
-        const cardId = card.id;
+        // 백엔드에서 할당한 ID가 있으면 우선 사용
+        const backendId = card.getAttribute('data-backend-id');
+        const cardId = backendId || card.id;
+        
         const exchange = card.getAttribute('data-exchange');
         const currencyPair = card.getAttribute('data-currency-pair');
+        
+        console.log('중지 요청에 사용할 카드 ID:', cardId, '(백엔드 ID 여부:', !!backendId, ')');
         
         const startBtn = card.querySelector('.start-button');
         const stopBtn = card.querySelector('.stop-button');
@@ -216,11 +221,9 @@ const CardComponent = (function() {
             loadingIndicator.style.display = 'none';
         }
         
-        // 중지 요청 전송 - cardId와 함께 exchange, currencyPair도 전달
-        console.log('중지 요청 전송 - ID:', cardId, 'Exchange:', exchange, 'Pair:', currencyPair);
         if (window.WebSocketService) {
-            // 전체 정보를 전달하여 정확히 찾을 수 있도록 함
-            window.WebSocketService.stopAnalysis(exchange, currencyPair, null, null, card);
+            console.log(`분석 중지 요청 전송 - ID: ${cardId}`);
+            window.WebSocketService.stopAnalysis(cardId);
         } else {
             console.error('WebSocketService를 찾을 수 없습니다.');
         }
@@ -244,21 +247,25 @@ const CardComponent = (function() {
     function deleteCard(card) {
         console.log('카드 삭제');
         
-        const cardId = card.id;
-        const exchange = card.getAttribute('data-exchange');
-        const currencyPair = card.getAttribute('data-currency-pair');
+        // 백엔드에서 할당한 ID가 있으면 우선 사용
+        const backendId = card.getAttribute('data-backend-id');
+        const cardId = backendId || card.id;
+        
+        console.log('삭제 시 사용할 카드 ID:', cardId, '(백엔드 ID 여부:', !!backendId, ')');
         
         // 먼저 분석 중지
-        console.log('삭제 전 분석 중지 요청 전송 - ID:', cardId, 'Exchange:', exchange, 'Pair:', currencyPair);
         if (window.WebSocketService) {
-            // 전체 정보를 전달하여 정확히 찾을 수 있도록 함
-            window.WebSocketService.stopAnalysis(exchange, currencyPair, null, null, card);
+            console.log(`삭제 전 분석 중지 요청 전송 - ID: ${cardId}`);
+            window.WebSocketService.stopAnalysis(cardId);
         } else {
             console.error('WebSocketService를 찾을 수 없습니다.');
         }
         
-        // 카드 제거
-        card.remove();
+        // 잠시 대기 후 카드 제거 (중지 요청 처리 시간 확보)
+        setTimeout(() => {
+            card.remove();
+            console.log(`카드 ${cardId} 삭제 완료`);
+        }, 500);
     }
     
     // 카드 업데이트 함수

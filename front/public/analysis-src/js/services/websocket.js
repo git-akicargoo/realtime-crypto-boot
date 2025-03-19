@@ -85,66 +85,110 @@ const WebSocketService = (function() {
             
             try {
                 // 카드별 토픽 생성
-                const cardSpecificTopic = `/topic/analysis.${tempCardId}`;
+                const cardSpecificTopic = `/topic/analysis.${connectionId}`;
                 console.log(`[${connectionId}] 카드별 토픽 구독: ${cardSpecificTopic}`);
                 
                 // 카드별 분석 결과 구독
                 const cardSubscription = stompClient.subscribe(cardSpecificTopic, function(message) {
                     try {
+                        console.log(`[${connectionId}] 카드별 토픽에서 메시지 수신:`, message.body);
                         const response = JSON.parse(message.body);
-                        console.log(`[${connectionId}] STOMP 응답 받음 (카드별 토픽):`, response);
-                        
                         processAnalysisResponse(message, response, connectionId, tempCardId, card);
                     } catch (error) {
                         console.error(`[${connectionId}] 응답 처리 중 오류 (카드별 토픽):`, error, message.body);
                     }
                 });
                 
-                // 추가: 모든 카드 ID 패턴 구독 (백엔드에서 생성하는 새 ID에 대응)
-                const allCardsTopic = `/topic/analysis.*`;
-                console.log(`[${connectionId}] 모든 카드 토픽 구독: ${allCardsTopic}`);
+                // 공통 토픽 구독 - 백엔드에서 새 ID를 할당하는 경우를 처리하기 위해
+                const commonTopic = `/topic/analysis`;
+                console.log(`[${connectionId}] 공통 토픽 구독: ${commonTopic}`);
                 
-                const allCardsSubscription = stompClient.subscribe(allCardsTopic, function(message) {
+                const commonSubscription = stompClient.subscribe(commonTopic, function(message) {
                     try {
                         const response = JSON.parse(message.body);
                         
-                        // 이 카드의 exchange와 currencyPair와 일치하는지 확인
-                        const msgExchange = response.exchange?.toLowerCase();
-                        const msgCurrencyPair = response.currencyPair?.toLowerCase();
-                        const cardExchange = exchange.toLowerCase();
-                        const cardCurrencyPair = currencyPair.toLowerCase();
-                        
-                        if (msgExchange === cardExchange && msgCurrencyPair === cardCurrencyPair) {
-                            console.log(`[${connectionId}] 일치하는 exchange/currencyPair 메시지 발견:`, response);
+                        // 이 카드와 관련된 메시지인지 확인 (exchange/currencyPair로)
+                        if (response.exchange?.toUpperCase() === exchange.toUpperCase() &&
+                            response.currencyPair?.toUpperCase() === currencyPair.toUpperCase()) {
+                            
+                            console.log(`[${connectionId}] 공통 토픽에서 관련 메시지 발견:`, response);
+                            
+                            // 백엔드에서 새 ID를 할당한 경우, 새로운 토픽도 구독
+                            if (response.cardId && response.cardId !== connectionId) {
+                                const newCardId = response.cardId;
+                                console.log(`[${connectionId}] 백엔드에서 새 ID 발견: ${newCardId}, 새 토픽 구독`);
+                                
+                                // 구독 객체가 없으면 초기화
+                                if (!subscriptions[connectionId]) {
+                                    subscriptions[connectionId] = {
+                                        cardSpecific: null,
+                                        common: commonSubscription,
+                                        stop: null,
+                                        newCardTopic: null,
+                                        backendTopic: null
+                                    };
+                                }
+                                
+                                // 이미 새 토픽을 구독하고 있는지 확인
+                                if (!subscriptions[connectionId].newCardTopic) {
+                                    const newCardTopic = `/topic/analysis.${newCardId}`;
+                                    const newCardSubscription = stompClient.subscribe(newCardTopic, function(newMessage) {
+                                        try {
+                                            console.log(`[${connectionId}] 새 ID 토픽에서 메시지 수신:`, newMessage.body);
+                                            const newResponse = JSON.parse(newMessage.body);
+                                            processAnalysisResponse(newMessage, newResponse, connectionId, tempCardId, card);
+                                        } catch (error) {
+                                            console.error(`[${connectionId}] 응답 처리 중 오류 (새 ID 토픽):`, error, newMessage.body);
+                                        }
+                                    });
+                                    
+                                    // 구독 객체에 새 토픽 추가
+                                    subscriptions[connectionId].newCardTopic = newCardSubscription;
+                                }
+                            }
+                            
                             processAnalysisResponse(message, response, connectionId, tempCardId, card);
                         }
                     } catch (error) {
-                        console.error(`[${connectionId}] 응답 처리 중 오류 (모든 카드 토픽):`, error, message.body);
+                        console.error(`[${connectionId}] 응답 처리 중 오류 (공통 토픽):`, error, message.body);
+                    }
+                });
+                
+                // 중지 응답 토픽 구독
+                const stopTopic = `/topic/analysis.stop.${connectionId}`;
+                console.log(`[${connectionId}] 중지 토픽 구독: ${stopTopic}`);
+                
+                const stopSubscription = stompClient.subscribe(stopTopic, function(message) {
+                    try {
+                        console.log(`[${connectionId}] 중지 메시지 수신:`, message.body);
+                        // 연결 정리 처리
+                        cleanupConnection(connectionId);
+                    } catch (error) {
+                        console.error(`[${connectionId}] 중지 메시지 처리 중 오류:`, error, message.body);
                     }
                 });
                 
                 // 구독 객체 저장
                 subscriptions[connectionId] = {
                     cardSpecific: cardSubscription,
-                    allCards: allCardsSubscription
+                    common: commonSubscription,
+                    stop: stopSubscription
                 };
                 
                 // 분석 시작 요청 전송
-                const requestData = {
+                const request = {
                     exchange: exchange,
                     currencyPair: currencyPair,
                     symbol: symbol,
                     quoteCurrency: quoteCurrency,
                     tradingStyle: tradingStyle,
-                    cardId: tempCardId,
-                    shortId: shortId,
-                    createdAt: createdAt
+                    cardId: connectionId // 현재 카드 ID 전달
                 };
                 
-                console.log(`[${connectionId}] 분석 요청 보내기:`, requestData);
+                console.log(`[${connectionId}] 분석 시작 요청 전송:`, request);
                 stompClient.publish({
                     destination: '/app/analysis.start',
-                    body: JSON.stringify(requestData)
+                    body: JSON.stringify(request)
                 });
                 
             } catch (error) {
@@ -195,217 +239,270 @@ const WebSocketService = (function() {
     
     // 분석 응답 처리 함수
     function processAnalysisResponse(message, response, connectionId, tempCardId, card) {
-        // 응답에 카드 ID가 있는지 확인
-        if (response.cardId) {
-            console.log(`[${connectionId}] 응답 카드 ID: ${response.cardId}, 현재 카드 ID: ${tempCardId}`);
-            
-            // 백엔드에서 받은 카드 ID가 현재 ID와 다른 경우 업데이트
-            if (response.cardId !== tempCardId && card) {
-                const backendCardId = response.cardId;
-                console.log(`[${connectionId}] 카드 ID 업데이트: ${tempCardId} -> ${backendCardId}`);
-                
-                // 카드 ID 업데이트
-                card.id = backendCardId;
-                
-                // 카드 ID 표시 업데이트
-                const cardIdDisplay = card.querySelector('.card-id-display');
-                if (cardIdDisplay) {
-                    cardIdDisplay.textContent = `ID: ${backendCardId}`;
-                }
-                
-                // 중요: 실제 연결 객체 가져오기
-                const stompClient = activeConnections[connectionId];
-                
-                // 연결 맵 업데이트
-                if (stompClient) {
-                    console.log(`[${connectionId}] 연결 맵 업데이트: ${tempCardId} -> ${backendCardId}`);
-                    activeConnections[backendCardId] = stompClient;
-                    delete activeConnections[connectionId];
-                } else {
-                    console.error(`[${connectionId}] 연결 객체를 찾을 수 없음`);
-                }
-                
-                // 구독 맵 업데이트
-                if (subscriptions[connectionId]) {
-                    subscriptions[backendCardId] = subscriptions[connectionId];
-                    delete subscriptions[connectionId];
-                }
-                
-                // 메시지 콜백 맵 업데이트
-                if (messageCallbacks[connectionId]) {
-                    messageCallbacks[backendCardId] = messageCallbacks[connectionId];
-                    delete messageCallbacks[connectionId];
-                }
-                
-                // connectionId 업데이트
-                connectionId = backendCardId;
-                
-                // 상태 객체 업데이트
-                if (window.state && window.state.activeCards) {
-                    if (window.state.activeCards[tempCardId]) {
-                        window.state.activeCards[backendCardId] = window.state.activeCards[tempCardId];
-                        window.state.activeCards[backendCardId].card = card;
-                        delete window.state.activeCards[tempCardId];
-                        console.log(`[${connectionId}] 상태 객체 업데이트 완료`);
-                    }
-                }
-                
-                // 디버깅: 업데이트 후 activeConnections 출력
-                console.log(`[${connectionId}] 업데이트 후 활성 연결 목록:`, Object.keys(activeConnections));
-            }
+        // 응답이 유효한지 확인
+        if (!response || !card) {
+            console.log(`[${connectionId}] 응답 또는 카드 없음. 응답 처리 중단`);
+            return;
         }
         
-        // 콜백 실행
-        if (messageCallbacks[connectionId]) {
-            console.log(`[${connectionId}] 메시지 콜백 실행`);
-            messageCallbacks[connectionId](response);
-        } else {
-            console.warn(`[${connectionId}] 메시지 콜백 없음`);
-            
-            // 카드 컴포넌트 직접 업데이트 시도
-            if (card && window.CardComponent && window.CardComponent.updateCard) {
-                console.log(`[${connectionId}] 카드 컴포넌트 직접 업데이트 시도`);
-                window.CardComponent.updateCard(card, response);
+        // 카드 ID 로깅
+        console.log(`[${connectionId}] processAnalysisResponse 호출 - 응답 cardId: ${response.cardId || 'none'}, 현재 connectionId: ${connectionId}, tempCardId: ${tempCardId}`);
+        
+        try {
+            // 응답에 카드 ID가 있는지 확인
+            if (response.cardId) {
+                console.log(`[${connectionId}] 응답 카드 ID: ${response.cardId}, 현재 카드 ID: ${tempCardId}`);
+                
+                // 백엔드에서 받은 카드 ID가 현재 ID와 다른 경우 업데이트
+                if (response.cardId !== tempCardId && response.cardId !== connectionId) {
+                    const backendCardId = response.cardId;
+                    console.log(`[${connectionId}] 카드 ID 업데이트: ${tempCardId} -> ${backendCardId}`);
+                    
+                    // 카드 ID 업데이트 전 기록
+                    console.log(`[${connectionId}] 업데이트 전 카드 ID: ${card.id}`);
+                    
+                    // 카드에 백엔드 ID를 데이터 속성으로 저장
+                    card.setAttribute('data-backend-id', backendCardId);
+                    
+                    // 카드 ID 표시 업데이트
+                    const cardIdDisplay = card.querySelector('.card-id-display');
+                    if (cardIdDisplay) {
+                        cardIdDisplay.textContent = `ID: ${backendCardId}`;
+                    }
+                    
+                    // STOMP 클라이언트 가져오기
+                    const stompClient = activeConnections[connectionId];
+                    
+                    // 백엔드 토픽 구독 추가 (새 ID 토픽 구독)
+                    if (stompClient && stompClient.connected) {
+                        // 백엔드 ID 토픽 구독 (아직 구독하지 않은 경우)
+                        if (subscriptions[connectionId]) {
+                            // 구독 객체가 없으면 초기화
+                            if (!subscriptions[connectionId].backendTopic) {
+                                console.log(`[${connectionId}] 백엔드 ID 토픽 구독: ${backendCardId}`);
+                                
+                                const backendTopic = `/topic/analysis.${backendCardId}`;
+                                const backendSubscription = stompClient.subscribe(backendTopic, function(backendMessage) {
+                                    try {
+                                        console.log(`[${connectionId}] 백엔드 토픽에서 메시지 수신:`, backendMessage.body);
+                                        const backendResponse = JSON.parse(backendMessage.body);
+                                        processAnalysisResponse(backendMessage, backendResponse, connectionId, tempCardId, card);
+                                    } catch (error) {
+                                        console.error(`[${connectionId}] 백엔드 토픽 응답 처리 중 오류:`, error, backendMessage.body);
+                                    }
+                                });
+                                
+                                // 구독 객체에 백엔드 토픽 추가
+                                subscriptions[connectionId].backendTopic = backendSubscription;
+                            }
+                        } else {
+                            console.warn(`[${connectionId}] 구독 객체가 없음. 백엔드 토픽 구독 건너뜀.`);
+                        }
+                    }
+                    
+                    // 상태 객체 업데이트
+                    if (window.state && window.state.activeCards) {
+                        if (window.state.activeCards[connectionId]) {
+                            window.state.activeCards[connectionId].backendId = backendCardId;
+                            console.log(`[${connectionId}] 상태 객체 업데이트: backendId=${backendCardId}`);
+                        }
+                    }
+                    
+                    console.log(`[${connectionId}] 카드 ID 업데이트 완료: UI ID=${card.id}, 백엔드 ID=${backendCardId}`);
+                }
             }
+            
+            // 콜백 실행
+            if (messageCallbacks[connectionId]) {
+                console.log(`[${connectionId}] 메시지 콜백 실행`);
+                messageCallbacks[connectionId](response);
+            } else {
+                console.warn(`[${connectionId}] 메시지 콜백 없음`);
+                
+                // 카드 컴포넌트 직접 업데이트 시도
+                if (card && window.CardComponent && window.CardComponent.updateCard) {
+                    console.log(`[${connectionId}] 카드 컴포넌트 직접 업데이트 시도`);
+                    window.CardComponent.updateCard(card, response);
+                }
+            }
+        } catch (error) {
+            console.error(`[${connectionId}] 응답 처리 중 예외 발생:`, error);
         }
     }
     
     // 분석 중지
     function stopAnalysis(exchangeOrCardId, currencyPair, symbol, quoteCurrency, card) {
+        console.log('분석 중지 호출:', arguments);
+        
         // 여러 매개변수가 있는 경우 (app.js에서 호출하는 형태)
         if (arguments.length >= 2) {
             const exchange = exchangeOrCardId; // 첫 번째 매개변수는 exchange
-            
             console.log('분석 중지 (exchange,pair):', exchange, currencyPair);
             
-            // cardId가 없는 경우, exchange와 currencyPair로 검색
-            const connectionIds = Object.keys(activeConnections);
-            const prefix = `${exchange.toLowerCase()}-${currencyPair.toLowerCase()}`;
-            const matchingId = connectionIds.find(id => id.startsWith(prefix));
+            // 1. 정확한 ID 찾기
+            let foundId = null;
             
-            if (matchingId) {
-                console.log(`연결 ID로 stopAnalysis 실행: ${matchingId}`);
-                // 재귀적으로 cardId 버전의 함수 호출
-                stopAnalysis(matchingId);
-                return;
-            } else {
-                console.error(`해당하는 연결을 찾을 수 없음: ${prefix}`);
+            // card 객체가 있으면 해당 ID 사용
+            if (card) {
+                // 백엔드 ID가 있으면 우선 사용
+                const backendId = card.getAttribute('data-backend-id');
+                foundId = backendId || card.id;
+                console.log(`카드 객체에서 ID 찾음: ${foundId}`);
+            } 
+            // card 객체 없이 exchange와 currencyPair만 있는 경우
+            else {
+                // 모든 활성 연결에서 exchange-currencyPair로 시작하는 ID 찾기
+                const prefix = `${exchange.toLowerCase()}-${currencyPair.toLowerCase()}`;
+                const connectionIds = Object.keys(activeConnections);
+                foundId = connectionIds.find(id => id.toLowerCase().startsWith(prefix));
                 
-                // 카드 ID가 있는 경우 (card 객체가 전달된 경우)
-                if (card && card.id) {
-                    console.log(`카드 ID를 사용하여 중지 시도: ${card.id}`);
-                    stopAnalysis(card.id);
-                    return;
+                if (foundId) {
+                    console.log(`exchange-currencyPair로 ID 찾음: ${foundId}`);
                 }
-                
+            }
+            
+            if (foundId) {
+                // 단일 파라미터 버전 호출
+                stopAnalysisById(foundId);
                 return;
             }
+            
+            console.error(`해당하는 연결을 찾을 수 없음: ${exchange}-${currencyPair}`);
+            return;
         }
         
         // 매개변수가 하나만 있는 경우 (cardId만 전달된 경우)
         if (arguments.length === 1 && typeof exchangeOrCardId === 'string') {
-            console.log('분석 중지 (cardId):', exchangeOrCardId);
-            
-            // 디버깅: 모든 활성 연결 출력
-            console.log('활성 연결 목록:', Object.keys(activeConnections));
-            
-            const connectionId = exchangeOrCardId;
-            
-            // 1. 정확한 ID로 찾기
-            if (activeConnections[connectionId]) {
-                const stompClient = activeConnections[connectionId];
-                
-                // 연결이 활성화되어 있으면 중지 메시지 전송
-                if (stompClient.connected) {
-                    // 원래 카드 ID에서 exchange와 currencyPair 추출
-                    const parts = connectionId.split('-');
-                    const exchange = parts[0];
-                    // 나머지 부분을 currencyPair로 사용 (UUID 부분 제외)
-                    const currencyPair = parts.slice(1, parts.length - 1).join('-');
-                    
-                    const stopRequest = {
-                        exchange: exchange,
-                        currencyPair: currencyPair,
-                        cardId: connectionId
-                    };
-                    
-                    console.log('중지 요청 전송:', stopRequest);
-                    stompClient.publish({
-                        destination: '/app/analysis.stop',
-                        body: JSON.stringify(stopRequest)
-                    });
-                }
-                
-                // 구독 정리
-                if (subscriptions[connectionId]) {
-                    if (subscriptions[connectionId].cardSpecific) {
-                        subscriptions[connectionId].cardSpecific.unsubscribe();
-                    }
-                    if (subscriptions[connectionId].allCards) {
-                        subscriptions[connectionId].allCards.unsubscribe();
-                    }
-                    delete subscriptions[connectionId];
-                }
-                
-                // STOMP 연결 종료
-                stompClient.deactivate();
-                delete activeConnections[connectionId];
-                
-                // 메시지 콜백 제거
-                if (messageCallbacks[connectionId]) {
-                    delete messageCallbacks[connectionId];
-                }
-                
-                console.log(`연결 ${connectionId} 성공적으로 종료됨`);
-                return;
-            }
-            
-            // 2. ID가 정확히 일치하지 않는 경우, 부분 일치로 찾기
-            console.log('중지할 STOMP 연결이 없습니다. 유사한 연결 찾기 시도...');
-            
-            // 부분 ID 추출 (exchange-currencyPair 부분)
-            const idParts = connectionId.split('-');
-            // 마지막 부분 (UUID)을 제외한 부분
-            const baseConnectionId = idParts.slice(0, -1).join('-').toLowerCase();
-            
-            console.log(`기본 연결 ID로 검색: ${baseConnectionId}`);
-            
-            // 모든 활성 연결 검사
-            const connectionIds = Object.keys(activeConnections);
-            
-            // 우선 시작 부분이 일치하는 연결 찾기
-            const exactPrefixMatch = connectionIds.find(id => 
-                id.toLowerCase().startsWith(baseConnectionId));
-                
-            if (exactPrefixMatch) {
-                console.log(`기본 ID로 정확한 연결 찾음: ${exactPrefixMatch}`);
-                stopAnalysis(exactPrefixMatch);
-                return;
-            }
-            
-            // 부분 일치하는 연결 찾기
-            const partialMatch = connectionIds.find(id => {
-                // exchange 부분 추출 (첫 번째 부분)
-                const idExchange = id.split('-')[0].toLowerCase();
-                const targetExchange = baseConnectionId.split('-')[0].toLowerCase();
-                
-                // 적어도 exchange는 일치해야 함
-                return idExchange === targetExchange && 
-                      (id.includes(baseConnectionId) || baseConnectionId.includes(id));
-            });
-            
-            if (partialMatch) {
-                console.log(`부분 일치하는 연결 찾음: ${partialMatch}`);
-                // 재귀적으로 호출하여 이 ID로 다시 시도
-                stopAnalysis(partialMatch);
-                return;
-            }
-            
-            // 모든 시도 실패
-            console.log('일치하는 연결을 찾을 수 없음. 분석이 이미 중지되었거나 실행 중이 아닌 것 같습니다.');
+            stopAnalysisById(exchangeOrCardId);
         } else {
             console.error('올바르지 않은 매개변수:', arguments);
         }
+    }
+    
+    // ID로 분석 중지 (내부용)
+    function stopAnalysisById(connectionId) {
+        console.log('ID로 분석 중지:', connectionId);
+        
+        // 디버깅: 모든 활성 연결 출력
+        console.log('활성 연결 목록:', Object.keys(activeConnections));
+        
+        // 1. 정확한 ID로 찾기
+        if (activeConnections[connectionId]) {
+            console.log(`정확한 ID로 연결 찾음: ${connectionId}`);
+            const stompClient = activeConnections[connectionId];
+            
+            // 연결이 활성화되어 있으면 중지 메시지 전송
+            if (stompClient.connected) {
+                // 원래 카드 ID에서 exchange와 currencyPair 추출
+                const parts = connectionId.split('-');
+                const exchange = parts[0];
+                // 나머지 부분을 currencyPair로 사용 (UUID 부분 제외)
+                const currencyPair = parts.slice(1, parts.length - 1).join('-');
+                
+                // 백엔드 ID 확인 (상태 객체에서)
+                let backendId = connectionId;
+                if (window.state && window.state.activeCards && window.state.activeCards[connectionId]) {
+                    backendId = window.state.activeCards[connectionId].backendId || connectionId;
+                }
+                
+                const stopRequest = {
+                    exchange: exchange,
+                    currencyPair: currencyPair,
+                    cardId: backendId // 백엔드 ID 사용
+                };
+                
+                console.log('중지 요청 전송:', stopRequest);
+                stompClient.publish({
+                    destination: '/app/analysis.stop',
+                    body: JSON.stringify(stopRequest)
+                });
+            }
+            
+            cleanupConnection(connectionId);
+            console.log(`연결 ${connectionId} 성공적으로 종료됨`);
+            return;
+        }
+        
+        // 2. ID가 정확히 일치하지 않는 경우, 부분 일치로 찾기
+        console.log('중지할 STOMP 연결이 없습니다. 유사한 연결 찾기 시도...');
+        
+        // 부분 ID 추출 (exchange-currencyPair 부분)
+        const idParts = connectionId.split('-');
+        // 마지막 부분 (UUID)을 제외한 부분
+        const baseConnectionId = idParts.slice(0, -1).join('-').toLowerCase();
+        
+        console.log(`기본 ID로 검색: ${baseConnectionId}`);
+        
+        // 모든 활성 연결 검사
+        const connectionIds = Object.keys(activeConnections);
+        
+        // 우선 시작 부분이 일치하는 연결 찾기
+        const exactPrefixMatch = connectionIds.find(id => 
+            id.toLowerCase().startsWith(baseConnectionId));
+            
+        if (exactPrefixMatch) {
+            console.log(`기본 ID로 정확한 연결 찾음: ${exactPrefixMatch}`);
+            cleanupConnection(exactPrefixMatch);
+            return;
+        }
+        
+        console.log('일치하는 연결을 찾을 수 없음. 분석이 이미 중지되었거나 실행 중이 아닌 것 같습니다.');
+    }
+    
+    // 연결 정리 함수 (내부용)
+    function cleanupConnection(connectionId) {
+        console.log(`[${connectionId}] 연결 정리 시작`);
+        
+        // 구독 정리
+        if (subscriptions[connectionId]) {
+            if (subscriptions[connectionId].cardSpecific) {
+                subscriptions[connectionId].cardSpecific.unsubscribe();
+                console.log(`[${connectionId}] 카드별 토픽 구독 해제`);
+            }
+            
+            if (subscriptions[connectionId].common) {
+                subscriptions[connectionId].common.unsubscribe();
+                console.log(`[${connectionId}] 공통 토픽 구독 해제`);
+            }
+            
+            if (subscriptions[connectionId].stop) {
+                subscriptions[connectionId].stop.unsubscribe();
+                console.log(`[${connectionId}] 중지 토픽 구독 해제`);
+            }
+            
+            if (subscriptions[connectionId].newCardTopic) {
+                subscriptions[connectionId].newCardTopic.unsubscribe();
+                console.log(`[${connectionId}] 새 ID 토픽 구독 해제`);
+            }
+            
+            if (subscriptions[connectionId].backendTopic) {
+                subscriptions[connectionId].backendTopic.unsubscribe();
+                console.log(`[${connectionId}] 백엔드 ID 토픽 구독 해제`);
+            }
+            
+            delete subscriptions[connectionId];
+        }
+        
+        // STOMP 연결 종료
+        if (activeConnections[connectionId]) {
+            activeConnections[connectionId].deactivate();
+            console.log(`[${connectionId}] STOMP 연결 종료`);
+            delete activeConnections[connectionId];
+        }
+        
+        // 메시지 콜백 제거
+        if (messageCallbacks[connectionId]) {
+            delete messageCallbacks[connectionId];
+            console.log(`[${connectionId}] 메시지 콜백 제거`);
+        }
+        
+        // 연결 상태 제거
+        if (connectionStatuses[connectionId]) {
+            delete connectionStatuses[connectionId];
+            console.log(`[${connectionId}] 연결 상태 제거`);
+        }
+        
+        console.log(`[${connectionId}] 연결 정리 완료`);
     }
     
     // 메시지 수신 콜백 등록
@@ -424,8 +521,11 @@ const WebSocketService = (function() {
                 if (subscriptions[connectionId].cardSpecific) {
                     subscriptions[connectionId].cardSpecific.unsubscribe();
                 }
-                if (subscriptions[connectionId].allCards) {
-                    subscriptions[connectionId].allCards.unsubscribe();
+                if (subscriptions[connectionId].common) {
+                    subscriptions[connectionId].common.unsubscribe();
+                }
+                if (subscriptions[connectionId].stop) {
+                    subscriptions[connectionId].stop.unsubscribe();
                 }
                 delete subscriptions[connectionId];
             }
