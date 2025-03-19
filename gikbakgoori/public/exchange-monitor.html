@@ -235,27 +235,17 @@
         }
 
         async function connect() {
-            // 이미 연결된 소켓이 있으면 먼저 닫습니다
-            if (ws) {
-                ws.close();
-                ws = null;
-                // 연결 닫힘을 처리하는 onclose가 자동으로 호출됩니다
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                addMessage('Already connected', 'info');
+                return;
             }
-            
-            // 데이터와 필터 초기화
-            clearData();
-            resetAll();
-            
-            // 상태 초기화
-            document.getElementById('wsStatus').textContent = 'Connecting...';
-            document.getElementById('connectBtn').disabled = true;
-            document.getElementById('disconnectBtn').disabled = false;
 
-            // 새 WebSocket 연결 생성
             ws = new WebSocket('ws://localhost:8080/ws/exchange');
             
             ws.onopen = () => {
                 document.getElementById('wsStatus').textContent = 'Connected';
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
                 addMessage('Connected to WebSocket', 'system');
             };
             
@@ -274,12 +264,6 @@
                 document.getElementById('disconnectBtn').disabled = true;
                 addMessage('Disconnected from WebSocket', 'system');
                 ws = null;
-            };
-
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                addMessage('WebSocket error occurred', 'error');
-                document.getElementById('wsStatus').textContent = 'Error';
             };
         }
 

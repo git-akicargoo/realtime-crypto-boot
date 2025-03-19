@@ -1,0 +1,341 @@
+/* 모의거래 시뮬레이션 스타일 */
+.analysis-section h2 {
+    margin-bottom: 1.5rem;
+    color: var(--primary-color);
+    font-size: 1.8rem;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 0.5rem;
+}
+
+/* 폼 컨테이너 스타일 개선 */
+.form-container {
+    background-color: var(--card-bg-color);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 1.5rem;
+}
+
+/* 폼 그룹 스타일 개선 */
+.form-group {
+    margin-bottom: 1.2rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-color);
+    font-size: 0.95rem;
+}
+
+/* 버튼 그룹 스타일 개선 */
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 0.5rem;
+}
+
+.signal-btn {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    background-color: var(--background-color);
+    color: var(--text-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+    text-align: center;
+}
+
+.signal-btn:hover {
+    background-color: var(--hover-color);
+    transform: translateY(-2px);
+}
+
+.signal-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 정적 값 표시 스타일 개선 */
+.static-value {
+    padding: 10px 15px;
+    background-color: var(--input-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-color);
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+/* 거래 제한 입력 그룹 스타일 개선 */
+.trading-limits {
+    display: flex;
+    gap: 20px;
+    margin-top: 0.5rem;
+}
+
+.limit-input {
+    flex: 1;
+}
+
+.limit-input input[type="number"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    font-size: 1rem;
+    transition: border-color 0.2s ease;
+}
+
+.limit-input input[type="number"]:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
+}
+
+/* 상태 컨테이너 스타일 개선 */
+.status-container {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: var(--card-bg-color);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.status-info {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 30px;
+}
+
+.info-group {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background-color: var(--background-color);
+    border-radius: 6px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.info-label {
+    font-weight: 600;
+    color: var(--text-secondary-color);
+    min-width: 100px;
+}
+
+.info-value {
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.info-value.positive {
+    color: var(--positive-color);
+}
+
+.info-value.negative {
+    color: var(--negative-color);
+}
+
+/* 테이블 컨테이너 스타일 개선 */
+.table-container {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: var(--card-bg-color);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.table-container h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--text-color);
+    font-size: 1.3rem;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+.data-table th,
+.data-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.data-table th {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+}
+
+.data-table tr:last-child td {
+    border-bottom: none;
+}
+
+.data-table tr:hover td {
+    background-color: var(--hover-color);
+}
+
+.data-table td.positive {
+    color: var(--positive-color);
+    font-weight: 600;
+}
+
+.data-table td.negative {
+    color: var(--negative-color);
+    font-weight: 600;
+}
+
+/* 시작 버튼 스타일 개선 */
+#startSimulTrading {
+    width: 100%;
+    padding: 12px;
+    font-size: 1.1rem;
+    margin-top: 1rem;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#startSimulTrading:hover {
+    background-color: var(--primary-hover-color, #0056b3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+#startSimulTrading:disabled {
+    background-color: var(--disabled-color, #cccccc);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* 카드 선택기 스타일 개선 */
+#cardSelector {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    font-size: 1rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 1em;
+}
+
+#cardSelector:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
+}
+
+/* 반응형 조정 */
+@media (max-width: 768px) {
+    .status-info {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .trading-limits {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .table-container {
+        overflow-x: auto;
+        padding: 15px;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 10px;
+        font-size: 0.9rem;
+    }
+    
+    .button-group {
+        flex-direction: row;
+    }
+    
+    .signal-btn {
+        padding: 8px;
+        font-size: 0.9rem;
+    }
+}
+
+/* 다크 모드 추가 스타일 */
+[data-theme="dark"] .info-item {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .data-table th {
+    background-color: var(--primary-dark-color, #004080);
+}
+
+/* 애니메이션 효과 */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.form-container,
+.status-container,
+.table-container {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+.data-table tr {
+    animation: fadeIn 0.3s ease-out forwards;
+    animation-delay: calc(0.05s * var(--row-index, 0));
+}
+
+/* 거래 상태에 따른 스타일 */
+.data-table td:nth-child(2) {
+    font-weight: 600;
+}
+
+.data-table td:nth-child(2):contains("BUY") {
+    color: var(--positive-color);
+}
+
+.data-table td:nth-child(2):contains("SELL") {
+    color: var(--negative-color);
+}
+
+.data-table td:nth-child(2):contains("HOLD") {
+    color: var(--neutral-color, #888888);
+} 
