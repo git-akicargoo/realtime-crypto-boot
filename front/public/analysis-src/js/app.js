@@ -287,30 +287,17 @@ function setupEventListeners() {
             const currencyPair = `${quoteCurrency}-${symbol}`;
             const displayPair = `${symbol}/${quoteCurrency}`;
             
-            // 기본 ID 생성 (거래소-화폐쌍 형식)
-            const baseId = `${exchange}-${quoteCurrency}-${symbol}`.toLowerCase();
-            
-            // 이미 동일한 분석이 진행 중인지 확인 (baseId로 확인)
-            const isAlreadyActive = Object.values(state.activeCards).some(cardInfo => 
-                cardInfo.baseId === baseId
-            );
-            
-            if (isAlreadyActive) {
-                showAlert('이미 동일한 거래쌍의 분석이 진행 중입니다.');
-                return;
-            }
-            
             // 카드 생성
             const card = CardComponent.createCard(exchange, currencyPair, symbol, quoteCurrency, displayPair);
             
-            // 카드 정보 저장 (임시 ID로 저장)
+            // 카드 정보 저장
             state.activeCards[card.id] = {
                 exchange: exchange,
                 currencyPair: currencyPair,
                 symbol: symbol,
                 quoteCurrency: quoteCurrency,
-                baseId: baseId,
-                card: card
+                card: card,
+                active: false // 초기에는 비활성 상태
             };
             
             console.log('카드 생성 완료, ID:', card.id);
@@ -321,6 +308,15 @@ function setupEventListeners() {
             // 중요: 웹소켓 메시지 콜백 등록 - 반드시 startAnalysis 전에 호출
             WebSocketService.onMessage(card.id, function(data) {
                 console.log('웹소켓 메시지 콜백 실행:', card.id, data);
+                
+                // 오류 응답 처리
+                if (data.error) {
+                    showAlert(data.error);
+                    // 카드 제거
+                    deleteCard(card.id);
+                    return;
+                }
+                
                 CardComponent.processWebSocketMessage(data);
             });
             
@@ -647,29 +643,65 @@ function deleteCard(cardId) {
         return;
     }
     
-    const card = cardInfo.card;
+    // 카드 요소 확인
+    const card = cardInfo.card || document.getElementById(cardId);
     if (!card) {
         console.error('삭제할 카드 요소를 찾을 수 없음:', cardId);
         delete state.activeCards[cardId];
         return;
     }
     
-    // 웹소켓 연결 종료
-    WebSocketService.stopAnalysis(cardId);
-    
-    // 카드 요소 제거
-    const cardsContainer = document.getElementById('cardsContainer');
-    if (cardsContainer && card.parentElement === cardsContainer) {
-        cardsContainer.removeChild(card);
+    try {
+        // 웹소켓 연결 종료
+        if (window.WebSocketService) {
+            // 카드 객체로 중지 시도
+            WebSocketService.stopAnalysis(card.getAttribute('data-exchange') || '', 
+                                         card.getAttribute('data-currency-pair') || '', 
+                                         null, null, card);
+            console.log('웹소켓 연결 종료 요청 완료');
+        }
+        
+        // 카드 요소 제거
+        if (card.parentElement) {
+            card.parentElement.removeChild(card);
+            console.log('카드 요소 제거 완료');
+        }
+        
+        // 상태에서 제거
+        delete state.activeCards[cardId];
+        console.log('상태에서 카드 정보 제거 완료');
+        
+        // 카드 삭제 이벤트 발생
+        document.dispatchEvent(new CustomEvent('cardDeleted', {
+            detail: { cardId: cardId }
+        }));
+        
+        console.log('카드 삭제 완료:', cardId);
+    } catch (error) {
+        console.error('카드 삭제 중 오류 발생:', error);
+        // 오류 발생해도 상태에서는 제거
+        delete state.activeCards[cardId];
     }
+}
+
+// 알림 표시 함수
+function showAlert(message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-warning alert-dismissible fade show';
+    alertDiv.role = 'alert';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
     
-    // 상태에서 제거
-    delete state.activeCards[cardId];
-    
-    // 카드 삭제 이벤트 발생
-    document.dispatchEvent(new CustomEvent('cardDeleted', {
-        detail: { cardId: cardId }
-    }));
-    
-    console.log('카드 삭제 완료:', cardId);
+    // 알림을 표시할 컨테이너 찾기
+    const container = document.querySelector('.container');
+    if (container) {
+        container.insertBefore(alertDiv, container.firstChild);
+        
+        // 5초 후 자동으로 알림 제거
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 5000);
+    }
 }
