@@ -390,9 +390,9 @@ const WebSocketService = (function() {
         if (activeConnections[connectionId]) {
             console.log(`정확한 ID로 연결 찾음: ${connectionId}`);
             const stompClient = activeConnections[connectionId];
-            
-            // 연결이 활성화되어 있으면 중지 메시지 전송
-            if (stompClient.connected) {
+        
+        // 연결이 활성화되어 있으면 중지 메시지 전송
+        if (stompClient.connected) {
                 // 원래 카드 ID에서 exchange와 currencyPair 추출
                 const parts = connectionId.split('-');
                 const exchange = parts[0];
@@ -405,17 +405,17 @@ const WebSocketService = (function() {
                     backendId = window.state.activeCards[connectionId].backendId || connectionId;
                 }
                 
-                const stopRequest = {
-                    exchange: exchange,
+            const stopRequest = {
+                exchange: exchange,
                     currencyPair: currencyPair,
                     cardId: backendId // 백엔드 ID 사용
-                };
-                
-                console.log('중지 요청 전송:', stopRequest);
-                stompClient.publish({
-                    destination: '/app/analysis.stop',
-                    body: JSON.stringify(stopRequest)
-                });
+            };
+            
+            console.log('중지 요청 전송:', stopRequest);
+            stompClient.publish({
+                destination: '/app/analysis.stop',
+                body: JSON.stringify(stopRequest)
+            });
             }
             
             cleanupConnection(connectionId);
@@ -487,7 +487,7 @@ const WebSocketService = (function() {
         if (activeConnections[connectionId]) {
             activeConnections[connectionId].deactivate();
             console.log(`[${connectionId}] STOMP 연결 종료`);
-            delete activeConnections[connectionId];
+        delete activeConnections[connectionId];
         }
         
         // 메시지 콜백 제거
@@ -593,7 +593,7 @@ const WebSocketService = (function() {
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
     WebSocketService.init();
-});
+}); 
 
 // WebSocketService를 window 객체에 추가
 window.WebSocketService = WebSocketService; 
