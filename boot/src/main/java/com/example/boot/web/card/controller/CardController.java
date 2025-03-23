@@ -1,6 +1,7 @@
 package com.example.boot.web.card.controller;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 카드 컨트롤러
  * 카드 관리를 위한 REST API를 제공합니다.
+ * CRUD 패턴을 따르는 RESTful API를 제공합니다.
  */
 @Slf4j
 @RestController
@@ -60,21 +63,13 @@ public class CardController {
         }
         
         try {
-            AnalysisRequest card;
+            // 세션 ID 생성
+            String sessionId = httpServletRequest.getSession().getId();
             
-            if (startAnalysis) {
-                // 세션 ID 생성 (실제 환경에서는 적절한 세션 ID 생성 필요)
-                String sessionId = httpServletRequest.getSession().getId();
-                
-                // 카드 생성 및 분석 시작
-                card = cardService.createCardAndStartAnalysis(request, sessionId);
-                log.info("Card created and analysis started: {}", card.getCardId());
-            } else {
-                // 카드만 생성
-                card = cardService.createCard(request);
-                log.info("Card created without analysis: {}", card.getCardId());
-            }
+            // 카드 생성 (필요시 분석 시작)
+            AnalysisRequest card = cardService.createCard(request, sessionId, startAnalysis);
             
+            log.info("Card created: {}, analysis started: {}", card.getCardId(), startAnalysis);
             return ResponseEntity.ok(card);
         } catch (Exception e) {
             log.error("Error creating card: {}", e.getMessage(), e);
@@ -85,67 +80,43 @@ public class CardController {
     }
     
     /**
-     * 분석 시작
+     * 카드 상태 업데이트 (분석 시작/중지 등)
      * 
      * @param cardId 카드 ID
+     * @param request 업데이트 요청 (status 필드 포함)
      * @param httpServletRequest HTTP 요청 정보
-     * @return 시작 결과
+     * @return 업데이트된 카드
      */
-    @PostMapping("/{cardId}/start")
-    public ResponseEntity<?> startAnalysis(
+    @PutMapping("/{cardId}")
+    public ResponseEntity<?> updateCard(
             @PathVariable String cardId,
+            @RequestBody Map<String, String> request,
             HttpServletRequest httpServletRequest) {
         
-        log.info("Received request to start analysis for card: {}", cardId);
+        log.info("Received card update request for cardId: {}, request: {}", cardId, request);
         
-        // 카드 조회
-        AnalysisRequest card = cardService.getCard(cardId);
-        if (card == null) {
-            return ResponseEntity.notFound().build();
+        String status = request.get("status");
+        if (status == null) {
+            return ResponseEntity.badRequest().body("Status field is required");
         }
         
         try {
-            // 세션 ID 생성 (실제 환경에서는 적절한 세션 ID 생성 필요)
+            // 세션 ID 생성
             String sessionId = httpServletRequest.getSession().getId();
             
-            // 분석 시작
-            cardService.startAnalysis(card, sessionId);
+            // 카드 상태 업데이트
+            AnalysisRequest updatedCard = cardService.updateCardStatus(cardId, status, sessionId);
+            if (updatedCard == null) {
+                return ResponseEntity.notFound().build();
+            }
             
-            return ResponseEntity.ok().body("Analysis started for card: " + cardId);
+            log.info("Card updated: {}, new status: {}", cardId, status);
+            return ResponseEntity.ok(updatedCard);
         } catch (Exception e) {
-            log.error("Error starting analysis: {}", e.getMessage(), e);
+            log.error("Error updating card: {}", e.getMessage(), e);
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error starting analysis: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * 분석 중지
-     * 
-     * @param cardId 카드 ID
-     * @return 중지 결과
-     */
-    @PostMapping("/{cardId}/stop")
-    public ResponseEntity<?> stopAnalysis(@PathVariable String cardId) {
-        log.info("Received request to stop analysis for card: {}", cardId);
-        
-        // 카드 조회
-        AnalysisRequest card = cardService.getCard(cardId);
-        if (card == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        try {
-            // 분석 중지
-            cardService.stopAnalysis(cardId);
-            
-            return ResponseEntity.ok().body("Analysis stopped for card: " + cardId);
-        } catch (Exception e) {
-            log.error("Error stopping analysis: {}", e.getMessage(), e);
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error stopping analysis: " + e.getMessage());
+                    .body("Error updating card: " + e.getMessage());
         }
     }
     
@@ -161,18 +132,18 @@ public class CardController {
     }
     
     /**
-     * 특정 카드 조회
+     * 특정 카드 조회 (웹소켓 연결 정보 포함)
      * 
      * @param cardId 카드 ID
-     * @return 카드 정보
+     * @return 카드 정보 및 웹소켓 연결 정보
      */
     @GetMapping("/{cardId}")
     public ResponseEntity<?> getCard(@PathVariable String cardId) {
-        AnalysisRequest card = cardService.getCard(cardId);
-        if (card == null) {
+        Map<String, Object> cardWithWsInfo = cardService.getCardWithWebSocketInfo(cardId);
+        if (cardWithWsInfo == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(card);
+        return ResponseEntity.ok(cardWithWsInfo);
     }
     
     /**

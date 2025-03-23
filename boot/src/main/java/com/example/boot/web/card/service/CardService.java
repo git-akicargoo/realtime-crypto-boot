@@ -2,6 +2,7 @@ package com.example.boot.web.card.service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import com.example.boot.exchange.layer6_analysis.dto.AnalysisRequest;
 import com.example.boot.exchange.layer6_analysis.service.CryptoAnalysisService;
 import com.example.boot.exchange.layer6_analysis.session_analysis.AnalysisManager;
+import com.example.boot.exchange.layer6_analysis.websocket.handler.AnalysisStompHandler;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,7 @@ public class CardService {
 
     private final AnalysisManager analysisManager;
     private final CryptoAnalysisService analysisService;
+    private final AnalysisStompHandler analysisStompHandler;
     
     // 메모리 기반 카드 저장소 (카드 ID -> 분석 요청)
     private final Map<String, AnalysisRequest> cardStore = new ConcurrentHashMap<>();
@@ -37,13 +40,16 @@ public class CardService {
     private final Map<String, String> cardTimestampMap = new ConcurrentHashMap<>();
     
     /**
-     * 카드 생성
+     * 카드 생성 및 필요시 분석 시작
      *
      * @param request 분석 요청 객체
+     * @param sessionId 세션 ID
+     * @param startAnalysis 분석 시작 여부
      * @return 생성된 카드 요청 객체
      */
-    public AnalysisRequest createCard(AnalysisRequest request) {
-        log.info("Creating card for {} - {}", request.getExchange(), request.getCurrencyPair());
+    public AnalysisRequest createCard(AnalysisRequest request, String sessionId, boolean startAnalysis) {
+        log.info("Creating card for {} - {}, startAnalysis: {}", 
+                request.getExchange(), request.getCurrencyPair(), startAnalysis);
         
         // 카드 ID 생성 또는 요청에서 가져오기
         String cardId = request.getCardId();
@@ -58,75 +64,107 @@ public class CardService {
         
         // 메모리에 저장
         cardStore.put(cardId, request);
-        cardStatusMap.put(cardId, "CREATED");
+        
+        // 초기 상태 설정
+        String initialStatus = startAnalysis ? "RUNNING" : "CREATED";
+        cardStatusMap.put(cardId, initialStatus);
         cardTimestampMap.put(cardId, LocalDateTime.now().toString());
+        
+        // 분석 액션 설정 (필요시)
+        request.setAction(initialStatus);
+        
+        // 필요한 경우 분석 시작
+        if (startAnalysis) {
+            // 분석 세션 등록
+            analysisManager.registerAnalysis(cardId, request, sessionId);
+            
+            // 분석 시작
+            analysisService.startAnalysis(request);
+        }
         
         return request;
     }
     
     /**
-     * 카드 생성 및 분석 시작
-     *
-     * @param request 분석 요청 객체
-     * @param sessionId 세션 ID
-     * @return 생성된 카드 요청 객체
-     */
-    public AnalysisRequest createCardAndStartAnalysis(AnalysisRequest request, String sessionId) {
-        // 카드 생성
-        AnalysisRequest createdRequest = createCard(request);
-        
-        // 분석 시작
-        startAnalysis(createdRequest, sessionId);
-        
-        return createdRequest;
-    }
-    
-    /**
-     * 분석 시작
-     *
-     * @param request 분석 요청 객체
-     * @param sessionId 세션 ID
-     */
-    public void startAnalysis(AnalysisRequest request, String sessionId) {
-        String cardId = request.getCardId();
-        log.info("Starting analysis for cardId: {}, sessionId: {}", cardId, sessionId);
-        
-        // 분석 세션 등록
-        analysisManager.registerAnalysis(cardId, request, sessionId);
-        
-        // 분석 시작
-        analysisService.startAnalysis(request);
-        
-        // 카드 상태 업데이트
-        updateCardStatus(cardId, "RUNNING", null);
-    }
-    
-    /**
-     * 분석 중지
+     * 카드 상태 업데이트 (분석 시작/중지)
      *
      * @param cardId 카드 ID
+     * @param status 새 상태 (RUNNING, STOPPED 등)
+     * @param sessionId 세션 ID
+     * @return 업데이트된 카드
      */
-    public void stopAnalysis(String cardId) {
-        log.info("Stopping analysis for cardId: {}", cardId);
+    public AnalysisRequest updateCardStatus(String cardId, String status, String sessionId) {
+        log.info("Updating card status: {} -> {}", cardId, status);
         
         // 카드 조회
-        AnalysisRequest request = getCard(cardId);
-        if (request == null) {
+        AnalysisRequest card = getCard(cardId);
+        if (card == null) {
             log.warn("Card not found: {}", cardId);
-            return;
+            return null;
         }
         
-        // 분석 중지
-        try {
-            analysisService.stopAnalysis(request);
-            analysisManager.unregisterAnalysis(cardId);
-            
-            // 카드 상태 업데이트
-            updateCardStatus(cardId, "STOPPED", null);
-        } catch (Exception e) {
-            log.error("Error stopping analysis: {}", e.getMessage(), e);
-            updateCardStatus(cardId, "ERROR", null);
+        // 현재 상태
+        String currentStatus = cardStatusMap.get(cardId);
+        
+        // 상태가 같으면 아무것도 하지 않음
+        if (status.equals(currentStatus)) {
+            log.info("Card {} already in status {}", cardId, status);
+            return card;
         }
+        
+        // 상태에 따른 액션 수행
+        if ("RUNNING".equals(status) && !"RUNNING".equals(currentStatus)) {
+            // 분석 시작
+            analysisManager.registerAnalysis(cardId, card, sessionId);
+            analysisService.startAnalysis(card);
+            log.info("Analysis started for card: {}", cardId);
+        } else if ("STOPPED".equals(status) && "RUNNING".equals(currentStatus)) {
+            // 분석 중지
+            analysisStompHandler.stopAnalysis(cardId, card.getExchange(), card.getCurrencyPair());
+            log.info("Analysis stopped for card: {}", cardId);
+        }
+        
+        // 상태 업데이트
+        cardStatusMap.put(cardId, status);
+        cardTimestampMap.put(cardId, LocalDateTime.now().toString());
+        card.setAction(status);
+        
+        return card;
+    }
+    
+    /**
+     * 카드 조회 및 웹소켓 연결 정보 포함
+     *
+     * @param cardId 카드 ID
+     * @return 카드 정보와 웹소켓 정보를 포함한 맵 (없으면 null)
+     */
+    public Map<String, Object> getCardWithWebSocketInfo(String cardId) {
+        AnalysisRequest card = getCard(cardId);
+        if (card == null) {
+            return null;
+        }
+        
+        // 카드 정보 + 웹소켓 정보를 Map으로 반환
+        Map<String, Object> result = new HashMap<>();
+        result.put("card", card);
+        result.put("websocket", createWebSocketInfo(cardId));
+        
+        return result;
+    }
+    
+    /**
+     * 웹소켓 연결 정보 생성
+     *
+     * @param cardId 카드 ID
+     * @return 웹소켓 연결 정보
+     */
+    private Map<String, String> createWebSocketInfo(String cardId) {
+        Map<String, String> wsInfo = new HashMap<>();
+        wsInfo.put("endpoint", "/ws");
+        wsInfo.put("topic", "/topic/analysis." + cardId);
+        wsInfo.put("errorTopic", "/topic/analysis.error." + cardId);
+        wsInfo.put("stopTopic", "/topic/analysis.stop." + cardId);
+        return wsInfo;
     }
     
     /**
@@ -167,29 +205,6 @@ public class CardService {
     }
     
     /**
-     * 카드 상태 업데이트
-     *
-     * @param cardId 카드 ID
-     * @param status 상태
-     * @param price  현재 가격
-     * @return 성공 여부
-     */
-    public boolean updateCardStatus(String cardId, String status, Double price) {
-        AnalysisRequest card = cardStore.get(cardId);
-        if (card == null) {
-            return false;
-        }
-        
-        cardStatusMap.put(cardId, status);
-        if (price != null) {
-            cardPriceMap.put(cardId, price);
-        }
-        cardTimestampMap.put(cardId, LocalDateTime.now().toString());
-        
-        return true;
-    }
-    
-    /**
      * 카드 삭제 (분석 중지 포함)
      *
      * @param cardId 카드 ID
@@ -202,10 +217,13 @@ public class CardService {
         }
         
         // 실행 중인 분석 중지
-        try {
-            stopAnalysis(cardId);
-        } catch (Exception e) {
-            log.warn("Error stopping analysis for cardId {}: {}", cardId, e.getMessage());
+        if ("RUNNING".equals(cardStatusMap.get(cardId))) {
+            try {
+                // 분석 중지
+                analysisStompHandler.stopAnalysis(cardId, card.getExchange(), card.getCurrencyPair());
+            } catch (Exception e) {
+                log.warn("Error stopping analysis for cardId {}: {}", cardId, e.getMessage());
+            }
         }
         
         // 카드 삭제
@@ -221,6 +239,10 @@ public class CardService {
     
     /**
      * 카드 ID 생성
+     * 
+     * @param exchange 거래소
+     * @param currencyPair 거래쌍
+     * @return 생성된 카드 ID
      */
     private String generateCardId(String exchange, String currencyPair) {
         String baseId = (exchange + "-" + currencyPair).toLowerCase();

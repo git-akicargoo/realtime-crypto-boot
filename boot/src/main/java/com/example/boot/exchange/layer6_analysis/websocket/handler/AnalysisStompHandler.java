@@ -36,7 +36,28 @@ public class AnalysisStompHandler {
      * @param sessionId 세션 ID
      */
     public void startAnalysis(AnalysisRequest request, String sessionId) {
-        String cardId = request.getCardId();
+        // 카드 ID가 없는 경우 생성
+        if (request.getCardId() == null || request.getCardId().isEmpty()) {
+            String generatedCardId = generateCardId(request.getExchange(), request.getCurrencyPair());
+            request.setCardId(generatedCardId);
+        }
+        
+        final String cardId = request.getCardId();
+        
+        // 이미 동일한 분석이 실행 중인지 확인
+        if (isDuplicateAnalysis(request)) {
+            log.warn("Duplicate analysis request detected for {}-{}", 
+                    request.getExchange(), request.getCurrencyPair());
+            sendErrorMessage(cardId, "이미 동일한 거래소와 코인에 대한 분석이 실행 중입니다.");
+            return;
+        }
+        
+        // 이미 실행 중인 카드에 대한 요청인지 확인
+        if (isCardAlreadyRunning(cardId)) {
+            log.info("Analysis already running for cardId: {}, restarting analysis", cardId);
+            // 기존 분석 중지 후 재시작
+            stopAnalysis(cardId, request.getExchange(), request.getCurrencyPair());
+        }
         
         log.info("Starting analysis for {}-{}, style: {}, cardId: {}, sessionId: {}", 
                 request.getExchange(), request.getCurrencyPair(), request.getTradingStyle(), 
@@ -149,6 +170,10 @@ public class AnalysisStompHandler {
      * @param message   오류 메시지
      */
     public void sendErrorMessage(String cardId, String message) {
+        if (cardId == null || cardId.isEmpty()) {
+            cardId = "unknown";
+        }
+        
         Map<String, String> errorMessage = Map.of(
             "cardId", cardId, 
             "error", message
@@ -218,5 +243,45 @@ public class AnalysisStompHandler {
         
         // 하위 호환성을 위해 공통 토픽에도 함께 전송
         messagingTemplate.convertAndSend("/topic/analysis.stop", stopMessage);
+    }
+    
+    /**
+     * 중복 분석 요청 확인
+     * 
+     * @param request 분석 요청 객체
+     * @return 중복 여부
+     */
+    private boolean isDuplicateAnalysis(AnalysisRequest request) {
+        String requestKey = (request.getExchange() + "-" + request.getCurrencyPair()).toLowerCase();
+        
+        // 활성 분석 중에 동일한 거래소-통화쌍이 있는지 확인
+        return analysisManager.getAllActiveRequests().stream()
+            .filter(req -> !req.getCardId().equals(request.getCardId())) // 자기 자신 제외
+            .anyMatch(req -> {
+                String key = (req.getExchange() + "-" + req.getCurrencyPair()).toLowerCase();
+                return key.equals(requestKey);
+            });
+    }
+    
+    /**
+     * 이미 실행 중인 카드인지 확인
+     * 
+     * @param cardId 카드 ID
+     * @return 실행 중 여부
+     */
+    private boolean isCardAlreadyRunning(String cardId) {
+        return analysisManager.isCardActive(cardId);
+    }
+    
+    /**
+     * 카드 ID 생성
+     * 
+     * @param exchange     거래소
+     * @param currencyPair 거래쌍
+     * @return 생성된 카드 ID
+     */
+    private String generateCardId(String exchange, String currencyPair) {
+        return (exchange + "-" + currencyPair).toLowerCase() + "-" + 
+                Long.toHexString(Double.doubleToLongBits(Math.random())).substring(0, 8);
     }
 } 

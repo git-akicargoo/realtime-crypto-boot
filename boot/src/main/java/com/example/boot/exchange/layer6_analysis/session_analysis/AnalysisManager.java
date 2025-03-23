@@ -134,4 +134,23 @@ public class AnalysisManager {
     public int getActiveAnalysisCount() {
         return cardToRequestMap.size();
     }
+    
+    /**
+     * 카드가 활성 상태인지 확인
+     * 
+     * @param cardId 카드 ID
+     * @return 활성 상태 여부
+     */
+    public boolean isCardActive(String cardId) {
+        return cardToRequestMap.containsKey(cardId);
+    }
+    
+    /**
+     * 모든 활성 분석 요청 가져오기
+     * 
+     * @return 활성 분석 요청 목록
+     */
+    public List<AnalysisRequest> getAllActiveRequests() {
+        return new ArrayList<>(cardToRequestMap.values());
+    }
 } 

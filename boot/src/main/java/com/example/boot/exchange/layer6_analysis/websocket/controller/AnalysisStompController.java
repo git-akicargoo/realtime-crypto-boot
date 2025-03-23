@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 분석 STOMP 컨트롤러
  * WebSocket을 통한 실시간 분석 요청을 처리합니다.
+ * 컨트롤러 역할에 충실하게 요청을 받아 핸들러로 위임합니다.
  */
 @Slf4j
 @Controller
@@ -36,6 +37,15 @@ public class AnalysisStompController {
         log.info("Received analysis start request via WebSocket: {}, sessionId: {}", request, sessionId);
         
         try {
+            // 인프라 상태 확인
+            var status = infraStatus.getStatus();
+            if (!status.isValid()) {
+                log.warn("Infrastructure not ready, status: {}", status);
+                analysisHandler.sendErrorMessage(request.getCardId(), "Trading infrastructure is not ready. Please try again later.");
+                return;
+            }
+            
+            // 핸들러에 분석 시작 위임
             analysisHandler.startAnalysis(request, sessionId);
         } catch (Exception e) {
             log.error("Error processing analysis start request: {}", e.getMessage(), e);
@@ -55,22 +65,11 @@ public class AnalysisStompController {
         log.info("Received analysis stop request via WebSocket: {}, sessionId: {}", request, sessionId);
         
         try {
+            // 핸들러에 분석 중지 위임
             analysisHandler.stopAnalysis(request.getCardId(), request.getExchange(), request.getCurrencyPair());
         } catch (Exception e) {
             log.error("Error processing analysis stop request: {}", e.getMessage(), e);
             analysisHandler.sendErrorMessage(request.getCardId(), e.getMessage());
         }
-    }
-    
-    /**
-     * 카드 ID 생성
-     * 
-     * @param exchange     거래소
-     * @param currencyPair 거래쌍
-     * @return 생성된 카드 ID
-     */
-    private String generateCardId(String exchange, String currencyPair) {
-        return (exchange + "-" + currencyPair).toLowerCase() + "-" + 
-                Long.toHexString(Double.doubleToLongBits(Math.random())).substring(0, 8);
     }
 } 
